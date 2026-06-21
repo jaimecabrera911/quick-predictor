@@ -35,6 +35,7 @@ export class SQLiteRepository implements IDataRepository {
 
       INSERT OR IGNORE INTO users (id, email, display_name, role) VALUES ('demo-user-1', 'demo@quinielapp.com', 'Jugador Demo', 'user');
       INSERT OR IGNORE INTO users (id, email, display_name, role) VALUES ('admin-user-1', 'admin@quinielapp.com', 'Admin Demo', 'super_admin');
+      INSERT OR IGNORE INTO users (id, email, display_name, role) VALUES ('admin-user-2', 'admin@quickpredictor.com', 'Admin', 'super_admin');
 
       CREATE TABLE IF NOT EXISTS tournaments (
         id TEXT PRIMARY KEY,

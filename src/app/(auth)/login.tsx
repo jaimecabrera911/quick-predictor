@@ -101,6 +101,7 @@ export default function LoginScreen() {
                 accent="green"
               />
 
+              {process.env.EXPO_PUBLIC_ENV === 'develop' && (
               <View style={{ gap: Spacing.two, marginTop: Spacing.two }}>
                 <Pressable
                   onPress={() => fillDemo('user')}
@@ -147,6 +148,7 @@ export default function LoginScreen() {
                   </ThemedText>
                 </Pressable>
               </View>
+              )}
 
               <View
                 style={{

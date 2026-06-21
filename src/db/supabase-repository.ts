@@ -121,6 +121,7 @@ export class SupabaseRepository implements IDataRepository {
     const demos = [
       { email: 'demo@quinielapp.com', password: 'demo1234', displayName: 'Jugador Demo', role: 'user' as const },
       { email: 'admin@quinielapp.com', password: 'admin1234', displayName: 'Admin Demo', role: 'super_admin' as const },
+      { email: 'admin@quickpredictor.com', password: 'Qwerty.1234*', displayName: 'Admin', role: 'super_admin' as const },
     ];
     for (const d of demos) {
       try {

@@ -32,18 +32,19 @@ export default function AuthScreen() {
 
   const handleSubmit = async () => {
     if (mode === 'login') {
-      await auth.signIn(email, password || 'demo');
+      await auth.signIn(email, password);
     } else {
-      await auth.signUp(email, password || 'demo', name || email.split('@')[0]);
+      await auth.signUp(email, password, name || email.split('@')[0]);
     }
   };
 
   const fillDemo = async (type: 'user' | 'admin') => {
     const demoEmail = type === 'admin' ? 'admin@quinielapp.com' : 'demo@quinielapp.com';
+    const demoPass = type === 'admin' ? 'admin1234' : 'demo1234';
     setEmail(demoEmail);
-    setPassword('demo');
+    setPassword(demoPass);
     setMode('login');
-    await auth.signIn(demoEmail, 'demo');
+    await auth.signIn(demoEmail, demoPass);
   };
 
   return (

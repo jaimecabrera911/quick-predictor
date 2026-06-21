@@ -188,6 +188,8 @@ export class WebRepository implements IDataRepository {
       accessType: data.accessType,
       inviteCode: data.accessType === 'code' ? this.genId().slice(0, 8).toUpperCase() : null,
       scoringRules: data.scoringRules,
+      prize: data.prize ?? null,
+      entryFee: data.entryFee ?? null,
       createdBy: data.createdBy ?? 'system',
       createdAt: new Date().toISOString(),
     };
@@ -199,6 +201,7 @@ export class WebRepository implements IDataRepository {
         quinielaId: q.id,
         userId: data.createdBy,
         totalPoints: 0,
+        paid: false,
         joinedAt: new Date().toISOString(),
       });
     }
@@ -212,7 +215,9 @@ export class WebRepository implements IDataRepository {
     name: string,
     description: string,
     deadline: string | null,
-    scoringRules: ScoringRules
+    scoringRules: ScoringRules,
+    prize: number | null,
+    entryFee: number | null
   ): Promise<Quiniela> {
     const idx = this.quinielas.findIndex((q) => q.id === id);
     if (idx === -1) throw new Error('Quiniela no encontrada');
@@ -222,6 +227,8 @@ export class WebRepository implements IDataRepository {
       description,
       deadline,
       scoringRules,
+      prize,
+      entryFee,
     };
     this.persist();
     return this.quinielas[idx];
@@ -251,6 +258,7 @@ export class WebRepository implements IDataRepository {
         quinielaId: q.id,
         userId,
         totalPoints: 0,
+        paid: false,
         joinedAt: new Date().toISOString(),
       });
       this.persist();
@@ -263,10 +271,16 @@ export class WebRepository implements IDataRepository {
       (p) => p.quinielaId === quinielaId && p.userId === userId
     );
     if (participant) {
-      // Delete predictions
       this.predictions = this.predictions.filter((p) => p.participantId !== participant.id);
-      // Delete participant
       this.participants = this.participants.filter((p) => p.id !== participant.id);
+      this.persist();
+    }
+  }
+
+  async setParticipantPaid(participantId: string, paid: boolean): Promise<void> {
+    const p = this.participants.find((x) => x.id === participantId);
+    if (p) {
+      p.paid = paid;
       this.persist();
     }
   }

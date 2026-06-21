@@ -8,6 +8,7 @@ import {
 } from 'expo-router/ui';
 import { SymbolView } from 'expo-symbols';
 import { Pressable, useColorScheme, View, StyleSheet, Platform } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 
 import { ExternalLink } from './external-link';
 import { ThemedText } from './themed-text';
@@ -30,14 +31,14 @@ export default function AppTabs() {
       <TabList asChild>
         <CustomTabList>
           <TabTrigger name="index" href={'/(tabs)' as any} asChild>
-            <TabButton>TORNEOS</TabButton>
+            <TabButton icon="emoji-events">TORNEOS</TabButton>
           </TabTrigger>
           <TabTrigger name="explore" href={'/(tabs)/explore' as any} asChild>
-            <TabButton>MIS PRONÓSTICOS</TabButton>
+            <TabButton icon="fact-check">MIS PRONÓSTICOS</TabButton>
           </TabTrigger>
           {isAdmin && (
             <TabTrigger name="admin" href={'/(tabs)/admin' as any} asChild>
-              <TabButton>ADMIN</TabButton>
+              <TabButton icon="admin-panel-settings">ADMIN</TabButton>
             </TabTrigger>
           )}
         </CustomTabList>
@@ -46,7 +47,7 @@ export default function AppTabs() {
   );
 }
 
-export function TabButton({ children, isFocused, ...props }: TabTriggerSlotProps) {
+export function TabButton({ children, isFocused, icon, ...props }: TabTriggerSlotProps & { icon?: keyof typeof MaterialIcons.glyphMap }) {
   const theme = useTheme();
   return (
     <Pressable {...props} style={({ pressed }) => pressed && styles.pressed}>
@@ -66,16 +67,25 @@ export function TabButton({ children, isFocused, ...props }: TabTriggerSlotProps
             borderColor: 'transparent'
           }
         ]}>
-        <ThemedText
-          style={{
-            fontSize: 11,
-            fontWeight: '700',
-            letterSpacing: 1,
-            color: isFocused ? theme.neonGreen : theme.textMuted,
-          }}
-        >
-          {children}
-        </ThemedText>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          {icon && (
+            <MaterialIcons
+              name={icon}
+              size={16}
+              color={isFocused ? theme.neonGreen : theme.textMuted}
+            />
+          )}
+          <ThemedText
+            style={{
+              fontSize: 11,
+              fontWeight: '700',
+              letterSpacing: 1,
+              color: isFocused ? theme.neonGreen : theme.textMuted,
+            }}
+          >
+            {children}
+          </ThemedText>
+        </View>
       </View>
     </Pressable>
   );

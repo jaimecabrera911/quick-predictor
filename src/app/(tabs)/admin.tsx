@@ -11,6 +11,7 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { MaterialIcons } from '@expo/vector-icons';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -105,15 +106,37 @@ export default function AdminScreen() {
       .finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    if (!success) return;
+    const t = setTimeout(() => setSuccess(null), 4000);
+    return () => clearTimeout(t);
+  }, [success]);
+
+
   const importedNames = useMemo(
     () => new Set(tournaments.filter((t) => t.status === 'active').map((t) => t.name)),
     [tournaments],
   );
 
   const filtered = useMemo(() => {
+    const active = leagues.filter((l) => l.current_season);
+
+    const byName = new Map<string, BSDLeague>();
+    for (const l of active) {
+      const existing = byName.get(l.name);
+      if (!existing) {
+        byName.set(l.name, l);
+      } else {
+        const eYear = existing.current_season?.year ?? 0;
+        const nYear = l.current_season?.year ?? 0;
+        if (nYear > eYear) byName.set(l.name, l);
+      }
+    }
+    const unique = Array.from(byName.values());
+
     const q = search.toLowerCase().trim();
-    if (!q) return leagues;
-    return leagues.filter(
+    if (!q) return unique;
+    return unique.filter(
       (l) =>
         l.name.toLowerCase().includes(q) ||
         l.country.toLowerCase().includes(q),
@@ -132,7 +155,20 @@ export default function AdminScreen() {
     setLoadingSeasons(true);
     try {
       const seasonData = await getSeasons(league.id);
-      setSeasons(seasonData.results);
+      const now = new Date().getFullYear();
+      const currentId = league.current_season?.id;
+      const upcoming = seasonData.results.filter((s) => {
+        if (s.id === currentId) return true;
+        if (s.year && s.year >= now) return true;
+        return false;
+      }).sort((a, b) => (a.year ?? 0) - (b.year ?? 0));
+      if (league.current_season) {
+        const current = upcoming.find((s) => s.id === currentId);
+        const others = upcoming.filter((s) => s.id !== currentId);
+        setSeasons(current ? [current, ...others] : [league.current_season, ...others]);
+      } else {
+        setSeasons(upcoming);
+      }
     } catch {
       if (league.current_season) {
         setSeasons([league.current_season]);
@@ -198,6 +234,7 @@ export default function AdminScreen() {
             name: league.name,
             season: selectedSeason?.name ?? league.country,
             accent,
+            createdBy: auth.user?.id ?? 'system',
           });
           await repo.updateTournamentStatus(tournament.id, 'active');
           tournamentId = tournament.id;
@@ -227,6 +264,7 @@ export default function AdminScreen() {
         setPreview(null);
         setSelectedSeason(null);
         setSeasons([]);
+        setTab('activos');
       } catch (e: any) {
         setError(e.message);
       } finally {
@@ -338,6 +376,7 @@ export default function AdminScreen() {
             onPress={() => setTab('disponibles')}
             count={leagues.length}
             color={Palette.neonCyan}
+            icon="sports-soccer"
           />
           <TabButton
             label="ACTIVOS"
@@ -345,6 +384,7 @@ export default function AdminScreen() {
             onPress={() => setTab('activos')}
             count={tournaments.length}
             color={Palette.neonGreen}
+            icon="check-circle"
           />
           <TabButton
             label="GESTIÓN"
@@ -352,6 +392,7 @@ export default function AdminScreen() {
             onPress={() => { setTab('gestion'); loadGestion(); }}
             count={allQuinielas.length}
             color={Palette.neonOrange}
+            icon="people"
           />
         </View>
 
@@ -377,9 +418,13 @@ export default function AdminScreen() {
                 borderRadius: BorderRadius.sm,
                 padding: Spacing.three,
                 marginBottom: Spacing.four,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: Spacing.two,
               }}
             >
-              <ThemedText style={[Typography.small, { color: Palette.neonPink }]}>
+              <MaterialIcons name="warning" size={18} color={Palette.neonPink} />
+              <ThemedText style={[Typography.small, { color: Palette.neonPink, flex: 1 }]}>
                 {error}
               </ThemedText>
             </ThemedView>
@@ -395,9 +440,13 @@ export default function AdminScreen() {
                 borderRadius: BorderRadius.sm,
                 padding: Spacing.three,
                 marginBottom: Spacing.four,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: Spacing.two,
               }}
             >
-              <ThemedText style={[Typography.small, { color: Palette.neonGreen }]}>
+              <MaterialIcons name="check-circle" size={18} color={Palette.neonGreen} />
+              <ThemedText style={[Typography.small, { color: Palette.neonGreen, flex: 1 }]}>
                 {success}
               </ThemedText>
             </ThemedView>
@@ -409,7 +458,7 @@ export default function AdminScreen() {
                 key="admin-search-input"
                 value={search}
                 onChangeText={setSearch}
-                placeholder="🔍 Buscar liga..."
+                placeholder="Buscar liga..."
                 accent="cyan"
               />
 
@@ -472,6 +521,7 @@ export default function AdminScreen() {
                               ]}
                             >
                               {league.country}
+                              {league.current_season ? ` · ${league.current_season.name}` : ''}
                             </ThemedText>
                           </View>
 
@@ -528,9 +578,12 @@ export default function AdminScreen() {
                 ) : (
                   <View style={{ gap: Spacing.four }}>
                     <View>
-                      <ThemedText style={[Typography.small, { color: Palette.neonOrange, letterSpacing: 1, marginBottom: Spacing.two }]}>
-                        USUARIOS ({users.length})
-                      </ThemedText>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.two, marginBottom: Spacing.two }}>
+                        <MaterialIcons name="people" size={16} color={Palette.neonOrange} />
+                        <ThemedText style={[Typography.small, { color: Palette.neonOrange, letterSpacing: 1 }]}>
+                          USUARIOS ({users.length})
+                        </ThemedText>
+                      </View>
                       {users.length === 0 ? (
                         <ThemedText style={[Typography.caption, { color: theme.textMuted }]}>Sin usuarios registrados</ThemedText>
                       ) : (
@@ -548,9 +601,12 @@ export default function AdminScreen() {
                     </View>
 
                     <View>
-                      <ThemedText style={[Typography.small, { color: Palette.neonOrange, letterSpacing: 1, marginBottom: Spacing.two }]}>
-                        QUINIELAS ({allQuinielas.length})
-                      </ThemedText>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.two, marginBottom: Spacing.two }}>
+                        <MaterialIcons name="quiz" size={16} color={Palette.neonOrange} />
+                        <ThemedText style={[Typography.small, { color: Palette.neonOrange, letterSpacing: 1 }]}>
+                          QUINIELAS ({allQuinielas.length})
+                        </ThemedText>
+                      </View>
                       {allQuinielas.length === 0 ? (
                         <ThemedText style={[Typography.caption, { color: theme.textMuted }]}>Sin quinielas creadas</ThemedText>
                       ) : (
@@ -607,8 +663,12 @@ export default function AdminScreen() {
                         alignItems: 'center',
                         marginTop: Spacing.six,
                         opacity: pressed ? 0.8 : 1,
+                        flexDirection: 'row',
+                        justifyContent: 'center',
+                        gap: Spacing.two,
                       })}
                     >
+                      <MaterialIcons name="delete-forever" size={20} color={Palette.neonPink} />
                       <ThemedText style={[Typography.headline, { color: Palette.neonPink, fontWeight: '700', letterSpacing: 2 }]}>
                         RESTABLECER BASE DE DATOS
                       </ThemedText>
@@ -677,8 +737,12 @@ export default function AdminScreen() {
                                   paddingHorizontal: Spacing.two,
                                   paddingVertical: Spacing.one,
                                   opacity: pressed || syncing === t.id ? 0.7 : 1,
+                                  flexDirection: 'row',
+                                  alignItems: 'center',
+                                  gap: Spacing.one,
                                 })}
                               >
+                                <MaterialIcons name="sync" size={14} color={Palette.neonCyan} />
                                 <ThemedText
                                   style={[
                                     Typography.small,
@@ -713,8 +777,16 @@ export default function AdminScreen() {
                                 paddingHorizontal: Spacing.two,
                                 paddingVertical: Spacing.one,
                                 opacity: pressed ? 0.8 : 1,
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: Spacing.one,
                               })}
                             >
+                              {isActive ? (
+                                <MaterialIcons name="check-circle" size={14} color={Palette.neonGreen} />
+                              ) : (
+                                <MaterialIcons name="cancel" size={14} color={Palette.neonPink} />
+                              )}
                               <ThemedText
                                 style={[
                                   Typography.small,
@@ -770,7 +842,10 @@ export default function AdminScreen() {
                 />
 
                 <ThemedText style={[Typography.headline, { color: theme.text, marginBottom: Spacing.three }]}>
-                  Seleccionar Temporada
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.two }}>
+                    <MaterialIcons name="calendar-month" size={20} color={Palette.neonCyan} />
+                    Seleccionar Temporada
+                  </View>
                 </ThemedText>
                 <ThemedText style={[Typography.small, { color: theme.textMuted, marginBottom: Spacing.five }]}>
                   {selectedLeague.name}
@@ -829,8 +904,12 @@ export default function AdminScreen() {
                         paddingVertical: Spacing.four,
                         alignItems: 'center',
                         opacity: pressed || !manualSeason.trim() ? 0.8 : 1,
+                        flexDirection: 'row',
+                        justifyContent: 'center',
+                        gap: Spacing.two,
                       })}
                     >
+                      <MaterialIcons name="file-download" size={20} color={Palette.black} />
                       <ThemedText style={[Typography.headline, { color: Palette.black, fontWeight: '700', letterSpacing: 2 }]}>
                         CARGAR PARTIDOS
                       </ThemedText>
@@ -943,8 +1022,12 @@ export default function AdminScreen() {
                     alignItems: 'center',
                     opacity: pressed || importing === preview.league.id.toString() ? 0.8 : 1,
                     marginTop: Spacing.two,
+                    flexDirection: 'row',
+                    justifyContent: 'center',
+                    gap: Spacing.two,
                   })}
                 >
+                  <MaterialIcons name="sports-soccer" size={20} color={Palette.black} />
                   <ThemedText
                     style={[
                       Typography.headline,
@@ -980,12 +1063,14 @@ function TabButton({
   onPress,
   count,
   color,
+  icon,
 }: {
   label: string;
   active: boolean;
   onPress: () => void;
   count: number;
   color: string;
+  icon?: keyof typeof MaterialIcons.glyphMap;
 }) {
   return (
     <Pressable
@@ -999,14 +1084,23 @@ function TabButton({
         opacity: pressed ? 0.8 : 1,
       })}
     >
-      <ThemedText
-        style={[
-          Typography.small,
-          { color: active ? color : '#FFFFFF60', fontWeight: '700', letterSpacing: 1.5 },
-        ]}
-      >
-        {label}
-      </ThemedText>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.one, marginBottom: Spacing.half }}>
+        {icon && (
+          <MaterialIcons
+            name={icon}
+            size={16}
+            color={active ? color : '#FFFFFF60'}
+          />
+        )}
+        <ThemedText
+          style={[
+            Typography.small,
+            { color: active ? color : '#FFFFFF60', fontWeight: '700', letterSpacing: 1.5 },
+          ]}
+        >
+          {label}
+        </ThemedText>
+      </View>
       <ThemedText
         style={[
           Typography.caption,

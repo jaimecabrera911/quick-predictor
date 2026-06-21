@@ -75,6 +75,8 @@ export class SQLiteRepository implements IDataRepository {
         points_winner INTEGER NOT NULL DEFAULT 2,
         points_goal INTEGER NOT NULL DEFAULT 2,
         points_goal_diff INTEGER NOT NULL DEFAULT 1,
+        prize REAL,
+        entry_fee REAL,
         created_by TEXT NOT NULL REFERENCES users(id),
         created_at TEXT NOT NULL DEFAULT (datetime('now'))
       );
@@ -84,6 +86,7 @@ export class SQLiteRepository implements IDataRepository {
         quiniela_id TEXT NOT NULL REFERENCES quinielas(id),
         user_id TEXT NOT NULL REFERENCES users(id),
         total_points REAL NOT NULL DEFAULT 0,
+        paid INTEGER NOT NULL DEFAULT 0,
         joined_at TEXT NOT NULL DEFAULT (datetime('now')),
         UNIQUE(quiniela_id, user_id)
       );
@@ -114,6 +117,24 @@ export class SQLiteRepository implements IDataRepository {
 
     try {
       await this.db.execAsync('ALTER TABLE matches ADD COLUMN current_minute INTEGER;');
+    } catch {
+      // Column may already exist
+    }
+
+    try {
+      await this.db.execAsync('ALTER TABLE quinielas ADD COLUMN prize REAL;');
+    } catch {
+      // Column may already exist
+    }
+
+    try {
+      await this.db.execAsync('ALTER TABLE quinielas ADD COLUMN entry_fee REAL;');
+    } catch {
+      // Column may already exist
+    }
+
+    try {
+      await this.db.execAsync('ALTER TABLE participants ADD COLUMN paid INTEGER NOT NULL DEFAULT 0;');
     } catch {
       // Column may already exist
     }
@@ -212,8 +233,8 @@ export class SQLiteRepository implements IDataRepository {
     const id = this.genId();
     const inviteCode = data.accessType === 'code' ? this.genId().slice(0, 8).toUpperCase() : null;
     await db.runAsync(
-      `INSERT INTO quinielas (id, tournament_id, name, description, deadline, access_type, invite_code, points_exact_score, points_winner, points_goal, points_goal_diff, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO quinielas (id, tournament_id, name, description, deadline, access_type, invite_code, points_exact_score, points_winner, points_goal, points_goal_diff, prize, entry_fee, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       id,
       data.tournamentId,
       data.name,
@@ -225,13 +246,15 @@ export class SQLiteRepository implements IDataRepository {
       data.scoringRules.pointsWinner,
       data.scoringRules.pointsGoal,
       data.scoringRules.pointsGoalDiff,
+      data.prize ?? null,
+      data.entryFee ?? null,
       data.createdBy || 'system'
     );
 
     if (data.createdBy) {
       const participantId = this.genId();
       await db.runAsync(
-        'INSERT INTO participants (id, quiniela_id, user_id) VALUES (?, ?, ?)',
+        'INSERT INTO participants (id, quiniela_id, user_id, paid) VALUES (?, ?, ?, 0)',
         participantId,
         id,
         data.createdBy
@@ -262,7 +285,7 @@ export class SQLiteRepository implements IDataRepository {
 
     const participantId = this.genId();
     await db.runAsync(
-      'INSERT INTO participants (id, quiniela_id, user_id) VALUES (?, ?, ?)',
+      'INSERT INTO participants (id, quiniela_id, user_id, paid) VALUES (?, ?, ?, 0)',
       participantId,
       quiniela.id,
       userId
@@ -285,6 +308,7 @@ export class SQLiteRepository implements IDataRepository {
       quinielaId: r.quiniela_id,
       userId: r.user_id,
       totalPoints: r.total_points,
+      paid: r.paid === 1,
       joinedAt: r.joined_at,
       user: {
         id: r.user_id,
@@ -613,13 +637,16 @@ export class SQLiteRepository implements IDataRepository {
     name: string,
     description: string,
     deadline: string | null,
-    scoringRules: ScoringRules
+    scoringRules: ScoringRules,
+    prize: number | null,
+    entryFee: number | null
   ): Promise<Quiniela> {
     const db = this.requireDb();
     await db.runAsync(
       `UPDATE quinielas 
        SET name = ?, description = ?, deadline = ?, 
-           points_exact_score = ?, points_winner = ?, points_goal = ?, points_goal_diff = ?
+           points_exact_score = ?, points_winner = ?, points_goal = ?, points_goal_diff = ?,
+           prize = ?, entry_fee = ?
        WHERE id = ?`,
       name,
       description,
@@ -628,6 +655,8 @@ export class SQLiteRepository implements IDataRepository {
       scoringRules.pointsWinner,
       scoringRules.pointsGoal,
       scoringRules.pointsGoalDiff,
+      prize,
+      entryFee,
       id
     );
     const row = await db.getFirstAsync<Record<string, any>>(
@@ -655,18 +684,24 @@ export class SQLiteRepository implements IDataRepository {
 
   async leaveQuiniela(quinielaId: string, userId: string): Promise<void> {
     const db = this.requireDb();
-    // Get participant ID first
     const participant = await db.getFirstAsync<{ id: string }>(
       'SELECT id FROM participants WHERE quiniela_id = ? AND user_id = ?',
       quinielaId,
       userId
     );
     if (participant) {
-      // Delete predictions
       await db.runAsync('DELETE FROM predictions WHERE participant_id = ?', participant.id);
-      // Delete participant
       await db.runAsync('DELETE FROM participants WHERE id = ?', participant.id);
     }
+  }
+
+  async setParticipantPaid(participantId: string, paid: boolean): Promise<void> {
+    const db = this.requireDb();
+    await db.runAsync(
+      'UPDATE participants SET paid = ? WHERE id = ?',
+      paid ? 1 : 0,
+      participantId
+    );
   }
 
   private mapUser(row: Record<string, any>): User {
@@ -726,6 +761,8 @@ export class SQLiteRepository implements IDataRepository {
         pointsGoal: row.points_goal,
         pointsGoalDiff: row.points_goal_diff,
       },
+      prize: row.prize ?? null,
+      entryFee: row.entry_fee ?? null,
       createdBy: row.created_by,
       createdAt: row.created_at,
     };

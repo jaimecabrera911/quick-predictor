@@ -1,11 +1,13 @@
 import { useState, useCallback } from 'react';
-import { ScrollView, View, StyleSheet, Pressable, Modal, Alert, Platform, RefreshControl } from 'react-native';
+import { ScrollView, View, StyleSheet, Pressable, Modal, Alert, Platform, RefreshControl, Share } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { MaterialIcons } from '@expo/vector-icons';
 
 import { StadiumCard } from '@/components/ui/stadium-card';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { ThemedTextInput } from '@/components/ui/themed-text-input';
+import { CreateQuinielaModal } from '@/components/ui/create-quiniela-modal';
 import { Typography } from '@/constants/typography';
 import {
   BottomTabInset,
@@ -51,16 +53,8 @@ export default function TorneosScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const [createTarget, setCreateTarget] = useState<Tournament | null>(null);
-  const [quinielaName, setQuinielaName] = useState('');
-  const [quinielaDesc, setQuinielaDesc] = useState('');
-  const [quinielaDeadline, setQuinielaDeadline] = useState('');
-  const [rulesExact, setRulesExact] = useState('5');
-  const [rulesWinner, setRulesWinner] = useState('2');
-  const [rulesGoal, setRulesGoal] = useState('2');
-  const [rulesGoalDiff, setRulesGoalDiff] = useState('1');
   const [createdQuiniela, setCreatedQuiniela] = useState<Quiniela | null>(null);
-  const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const [joinCode, setJoinCode] = useState('');
   const [joinMessage, setJoinMessage] = useState<string | null>(null);
@@ -73,6 +67,8 @@ export default function TorneosScreen() {
   const [editName, setEditName] = useState('');
   const [editDesc, setEditDesc] = useState('');
   const [editDeadline, setEditDeadline] = useState('');
+  const [editPrize, setEditPrize] = useState('');
+  const [editFee, setEditFee] = useState('');
   const [editRulesExact, setEditRulesExact] = useState('5');
   const [editRulesWinner, setEditRulesWinner] = useState('2');
   const [editRulesGoal, setEditRulesGoal] = useState('2');
@@ -125,40 +121,6 @@ export default function TorneosScreen() {
     setRefreshing(false);
   }, [loadData]);
 
-  const handleCreateQuiniela = useCallback(async () => {
-    if (!createTarget || !quinielaName.trim() || !auth.user) return;
-    setCreating(true);
-    setCreateError(null);
-    try {
-      const deadlineVal = quinielaDeadline.trim() ? new Date(quinielaDeadline.trim()).toISOString() : null;
-      if (quinielaDeadline.trim() && isNaN(new Date(quinielaDeadline.trim()).getTime())) {
-        setCreateError('Fecha límite inválida (usa formato YYYY-MM-DD)');
-        setCreating(false);
-        return;
-      }
-      const q = await repo.createQuiniela({
-        tournamentId: createTarget.id,
-        name: quinielaName.trim(),
-        description: quinielaDesc.trim(),
-        deadline: deadlineVal,
-        accessType: 'code',
-        scoringRules: {
-          pointsExactScore: parseInt(rulesExact, 10) || 5,
-          pointsWinner: parseInt(rulesWinner, 10) || 2,
-          pointsGoal: parseInt(rulesGoal, 10) || 2,
-          pointsGoalDiff: parseInt(rulesGoalDiff, 10) || 1,
-        },
-        createdBy: auth.user.id,
-      });
-      setCreatedQuiniela(q);
-      setUserQuinielas((prev) => [...prev, q]);
-    } catch (e: any) {
-      setCreateError(e.message);
-    } finally {
-      setCreating(false);
-    }
-  }, [createTarget, quinielaName, quinielaDesc, quinielaDeadline, rulesExact, rulesWinner, rulesGoal, rulesGoalDiff, auth.user, repo]);
-
   const handleJoin = useCallback(async () => {
     if (!joinCode.trim() || !auth.user) return;
     setJoining(true);
@@ -187,7 +149,7 @@ export default function TorneosScreen() {
     try {
       const deadlineVal = editDeadline.trim() ? new Date(editDeadline.trim()).toISOString() : null;
       if (editDeadline.trim() && isNaN(new Date(editDeadline.trim()).getTime())) {
-        setCreateError('Fecha límite inválida (usa formato YYYY-MM-DD)');
+        setError('Fecha límite inválida (usa formato YYYY-MM-DD)');
         return;
       }
       const updated = await repo.updateQuiniela(
@@ -200,21 +162,23 @@ export default function TorneosScreen() {
           pointsWinner: parseInt(editRulesWinner, 10) || 2,
           pointsGoal: parseInt(editRulesGoal, 10) || 2,
           pointsGoalDiff: parseInt(editRulesGoalDiff, 10) || 1,
-        }
+        },
+        editPrize.trim() ? parseFloat(editPrize.trim()) : null,
+        editFee.trim() ? parseFloat(editFee.trim()) : null
       );
       setUserQuinielas((prev) => prev.map((q) => q.id === updated.id ? updated : q));
       setEditingQuiniela(null);
     } catch (e: any) {
-      setCreateError(e.message);
+      setError(e.message);
     }
-  }, [editingQuiniela, editName, editDesc, editDeadline, editRulesExact, editRulesWinner, editRulesGoal, editRulesGoalDiff, repo, auth.user]);
+  }, [editingQuiniela, editName, editDesc, editDeadline, editPrize, editFee, editRulesExact, editRulesWinner, editRulesGoal, editRulesGoalDiff, repo, auth.user]);
 
   const handleDeleteQuiniela = useCallback(async (quinielaId: string) => {
     try {
       await repo.deleteQuiniela(quinielaId);
       setUserQuinielas((prev) => prev.filter((q) => q.id !== quinielaId));
     } catch (e: any) {
-      setCreateError(e.message);
+      setError(e.message);
     }
   }, [repo]);
 
@@ -224,7 +188,7 @@ export default function TorneosScreen() {
       await repo.leaveQuiniela(quinielaId, auth.user.id);
       setUserQuinielas((prev) => prev.filter((q) => q.id !== quinielaId));
     } catch (e: any) {
-      setCreateError(e.message);
+      setError(e.message);
     }
   }, [repo, auth.user]);
 
@@ -339,15 +303,7 @@ export default function TorneosScreen() {
                     <Pressable
                       onPress={() => {
                         setCreateTarget(t);
-                        setQuinielaName('');
-                        setQuinielaDesc('');
-                        setQuinielaDeadline('');
-                        setRulesExact('5');
-                        setRulesWinner('2');
-                        setRulesGoal('2');
-                        setRulesGoalDiff('1');
                         setCreatedQuiniela(null);
-                        setCreateError(null);
                       }}
                       style={({ pressed }) => ({
                         backgroundColor: accentColor + '20',
@@ -555,9 +511,21 @@ export default function TorneosScreen() {
                             </ThemedText>
                           ) : null}
                           {q.inviteCode && (
-                            <ThemedText style={[Typography.caption, { color: theme.textMuted, marginTop: Spacing.half }]}>
-                              Código: <ThemedText style={{ color: Palette.neonYellow, fontFamily: 'monospace' }}>{q.inviteCode}</ThemedText>
-                            </ThemedText>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: Spacing.half }}>
+                              <ThemedText style={[Typography.caption, { color: theme.textMuted }]}>
+                                Código: <ThemedText style={{ color: Palette.neonYellow, fontFamily: 'monospace' }}>{q.inviteCode}</ThemedText>
+                              </ThemedText>
+                              <Pressable
+                                onPress={() => {
+                                  Share.share({
+                                    message: `Únete a mi quiniela "${q.name}" con el código: ${q.inviteCode}`,
+                                  });
+                                }}
+                                style={{ marginLeft: Spacing.two }}
+                              >
+                                <MaterialIcons name="share" size={14} color={Palette.neonYellow} />
+                              </Pressable>
+                            </View>
                           )}
 
                           <View style={{ flexDirection: 'row', gap: Spacing.two, marginTop: Spacing.three }}>
@@ -569,11 +537,13 @@ export default function TorneosScreen() {
                                     setEditName(q.name);
                                     setEditDesc(q.description || '');
                                     setEditDeadline(q.deadline ? new Date(q.deadline).toISOString().split('T')[0] : '');
+                                    setEditPrize(q.prize != null ? q.prize.toString() : '');
+                                    setEditFee(q.entryFee != null ? q.entryFee.toString() : '');
                                     setEditRulesExact(q.scoringRules.pointsExactScore.toString());
                                     setEditRulesWinner(q.scoringRules.pointsWinner.toString());
                                     setEditRulesGoal(q.scoringRules.pointsGoal.toString());
                                     setEditRulesGoalDiff(q.scoringRules.pointsGoalDiff.toString());
-                                    setCreateError(null);
+                                    setError(null);
                                   }}
                                   style={({ pressed }) => ({
                                     flex: 1,
@@ -639,123 +609,24 @@ export default function TorneosScreen() {
         </ScrollView>
       </SafeAreaView>
 
-      <Modal
-        visible={!!createTarget && !createdQuiniela}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setCreateTarget(null)}
-      >
-        <View style={styles.modalOverlay}>
-          <Pressable
-            style={StyleSheet.absoluteFill}
-            onPress={() => setCreateTarget(null)}
-          />
-          <View
-            style={[
-              styles.modalContent,
-              { backgroundColor: theme.surface, borderColor: theme.surfaceBorder },
-            ]}
-          >
-            <View
-              style={{
-                width: 40,
-                height: 3,
-                backgroundColor: createTarget ? ACCENT_COLORS[createTarget.accent in ACCENT_COLORS ? createTarget.accent : 'green'] : Palette.neonGreen,
-                borderRadius: 2,
-                marginBottom: Spacing.four,
-                alignSelf: 'center',
-              }}
-            />
-
-            <ThemedText style={[Typography.headline, { color: theme.text, marginBottom: Spacing.one }]}>
-              Nueva Quiniela
-            </ThemedText>
-            <ThemedText style={[Typography.small, { color: theme.textMuted, marginBottom: Spacing.five }]}>
-              {createTarget?.name}
-            </ThemedText>
-
-            <ThemedTextInput
-              value={quinielaName}
-              onChangeText={setQuinielaName}
-              placeholder="Nombre de tu quiniela"
-              accent={(createTarget?.accent || 'green') as NeonAccent}
-            />
-
-            <ThemedTextInput
-              value={quinielaDesc}
-              onChangeText={setQuinielaDesc}
-              placeholder="Descripción (opcional)"
-              multiline
-              numberOfLines={3}
-              style={{ minHeight: 60, textAlignVertical: 'top' }}
-              accent={(createTarget?.accent || 'green') as NeonAccent}
-            />
-
-            <ThemedTextInput
-              value={quinielaDeadline}
-              onChangeText={setQuinielaDeadline}
-              placeholder="Fecha límite (YYYY-MM-DD, opcional)"
-              accent={(createTarget?.accent || 'green') as NeonAccent}
-            />
-
-            <ThemedText style={[Typography.small, { color: theme.textMuted, letterSpacing: 1, marginBottom: Spacing.two }]}>
-              REGLAS DE PUNTUACIÓN
-            </ThemedText>
-
-            <View style={{ flexDirection: 'row', gap: Spacing.two, marginBottom: Spacing.four }}>
-              {[
-                { label: 'Exacto', value: rulesExact, setter: setRulesExact },
-                { label: 'Ganador', value: rulesWinner, setter: setRulesWinner },
-                { label: 'Gol', value: rulesGoal, setter: setRulesGoal },
-                { label: 'Dif.', value: rulesGoalDiff, setter: setRulesGoalDiff },
-              ].map((rule) => (
-                <View key={rule.label} style={{ flex: 1 }}>
-                  <ThemedTextInput
-                    label={rule.label}
-                    value={rule.value}
-                    onChangeText={rule.setter}
-                    keyboardType="number-pad"
-                    accent={(createTarget?.accent || 'green') as NeonAccent}
-                    style={{ textAlign: 'center' }}
-                    containerStyle={{ marginBottom: 0 }}
-                  />
-                </View>
-              ))}
-            </View>
-
-            {createError && (
-              <ThemedText style={[Typography.small, { color: Palette.neonPink, marginBottom: Spacing.three }]}>
-                {createError}
-              </ThemedText>
-            )}
-
-            <Pressable
-              onPress={handleCreateQuiniela}
-              disabled={creating || !quinielaName.trim()}
-              style={({ pressed }) => ({
-                backgroundColor: createTarget ? ACCENT_COLORS[createTarget.accent in ACCENT_COLORS ? createTarget.accent : 'green'] : Palette.neonGreen,
-                borderRadius: BorderRadius.md,
-                paddingVertical: Spacing.four,
-                alignItems: 'center',
-                opacity: pressed || creating || !quinielaName.trim() ? 0.8 : 1,
-              })}
-            >
-              <ThemedText style={[Typography.headline, { color: Palette.black, fontWeight: '700', letterSpacing: 2 }]}>
-                {creating ? 'CREANDO...' : 'CREAR QUINIELA'}
-              </ThemedText>
-            </Pressable>
-
-            <Pressable
-              onPress={() => setCreateTarget(null)}
-              style={{ marginTop: Spacing.three, alignItems: 'center' }}
-            >
-              <ThemedText style={[Typography.caption, { color: theme.textMuted }]}>
-                Cancelar
-              </ThemedText>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
+      <CreateQuinielaModal
+        visible={!!createTarget}
+        tournament={createTarget}
+        onClose={() => setCreateTarget(null)}
+        onCreate={async (data) => {
+          if (!auth.user) throw new Error('No autenticado');
+          const q = await repo.createQuiniela({
+            tournamentId: createTarget!.id,
+            ...data,
+            accessType: 'code',
+            createdBy: auth.user.id,
+          });
+          setCreatedQuiniela(q);
+          setUserQuinielas((prev) => [...prev, q]);
+          return q;
+        }}
+        createdQuiniela={createdQuiniela}
+      />
 
       <Modal
         visible={!!createdQuiniela}
@@ -815,6 +686,29 @@ export default function TorneosScreen() {
                 >
                   {createdQuiniela.inviteCode}
                 </ThemedText>
+                <Pressable
+                  onPress={() => {
+                    Share.share({
+                      message: `Únete a mi quiniela "${createdQuiniela.name}" con el código: ${createdQuiniela.inviteCode}`,
+                    });
+                  }}
+                  style={({ pressed }) => ({
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: Spacing.one,
+                    marginTop: Spacing.three,
+                    backgroundColor: Palette.neonGreen + '20',
+                    borderRadius: BorderRadius.sm,
+                    paddingHorizontal: Spacing.four,
+                    paddingVertical: Spacing.two,
+                    opacity: pressed ? 0.8 : 1,
+                  })}
+                >
+                  <MaterialIcons name="share" size={16} color={Palette.neonGreen} />
+                  <ThemedText style={[Typography.small, { color: Palette.neonGreen }]}>
+                    COMPARTIR
+                  </ThemedText>
+                </Pressable>
               </View>
             )}
 
@@ -895,6 +789,27 @@ export default function TorneosScreen() {
               accent="cyan"
             />
 
+            <View style={{ flexDirection: 'row', gap: Spacing.two }}>
+              <View style={{ flex: 1 }}>
+                <ThemedTextInput
+                  value={editPrize}
+                  onChangeText={setEditPrize}
+                  placeholder="Premio ($, opcional)"
+                  keyboardType="decimal-pad"
+                  accent="cyan"
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <ThemedTextInput
+                  value={editFee}
+                  onChangeText={setEditFee}
+                  placeholder="Cuota ($, opcional)"
+                  keyboardType="decimal-pad"
+                  accent="cyan"
+                />
+              </View>
+            </View>
+
             <ThemedText style={[Typography.small, { color: theme.textMuted, letterSpacing: 1, marginBottom: Spacing.two }]}>
               REGLAS DE PUNTUACIÓN
             </ThemedText>
@@ -920,9 +835,9 @@ export default function TorneosScreen() {
               ))}
             </View>
 
-            {createError && (
+            {error && (
               <ThemedText style={[Typography.small, { color: Palette.neonPink, marginBottom: Spacing.three }]}>
-                {createError}
+                {error}
               </ThemedText>
             )}
 

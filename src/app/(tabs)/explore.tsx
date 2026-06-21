@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
-import { ScrollView, View, StyleSheet, Pressable, ActivityIndicator, RefreshControl, Platform } from 'react-native';
+import { ScrollView, View, StyleSheet, Pressable, ActivityIndicator, RefreshControl, Platform, Share, Keyboard, InteractionManager, Modal, KeyboardAvoidingView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 
@@ -21,8 +21,9 @@ import { useAuth } from '@/hooks/use-auth';
 import { useRepository } from '@/db/context';
 import { resolveMatchPlaceholders } from '@/utils/match';
 import type { Quiniela, Match, Prediction, Participant, StandingEntry, Tournament, User } from '@/db/types';
-import { syncTournamentMatches, getLeagues } from '@/services';
+import { syncTournamentMatches, syncActiveTournamentsForUser } from '@/services';
 import { Image } from 'expo-image';
+import { MaterialIcons } from '@expo/vector-icons';
 import { getTeamLogo, getLeagueLogo } from '@/utils/logos';
 import { parseMatchDate, formatMatchDateTime, isMatchStarted, getMatchLocalDateString, getTodayDateString, compareMatchDatesAsc } from '@/utils/date';
 
@@ -54,7 +55,24 @@ export default function PredictionsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [expandedQuiniela, setExpandedQuiniela] = useState<string | null>(null);
   const hasInitializedExpansion = useRef(false);
-  const [predictingMatch, setPredictingMatch] = useState<string | null>(null);
+  type PredictionModalState = {
+    matchId: string;
+    quinielaId: string;
+    participantId: string | null;
+    homeTeam: string;
+    awayTeam: string;
+    stage: string;
+    groupName?: string;
+    matchDate: string;
+    accent: NeonAccent;
+    initialHome: number | null;
+    initialAway: number | null;
+    isBlocked: boolean;
+  };
+  const [predictionModal, setPredictionModal] = useState<PredictionModalState | null>(null);
+  const predictingMatchRef = useRef<string | null>(null);
+  const pendingReloadRef = useRef(false);
+  predictingMatchRef.current = predictionModal?.matchId ?? null;
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [matchPages, setMatchPages] = useState<Record<string, number>>({});
@@ -107,76 +125,70 @@ export default function PredictionsScreen() {
           };
         }),
       );
+      if (predictingMatchRef.current) {
+        pendingReloadRef.current = true;
+        return;
+      }
       setQuinielas(withDetails);
       if (withDetails.length > 0 && !hasInitializedExpansion.current) {
         setExpandedQuiniela(withDetails[0].id);
         hasInitializedExpansion.current = true;
       }
     } catch { } finally {
-      setLoading(false);
+      if (!predictingMatchRef.current) {
+        setLoading(false);
+      }
     }
   }, [repo, auth.user?.id]);
 
-  const syncAllActiveTournaments = useCallback(async () => {
-    if (!auth.user) return;
+  const syncAndLoad = useCallback(async () => {
+    if (!auth.user || predictingMatchRef.current) return;
     try {
-      const allQ = await repo.getQuinielas();
-      const allP = [];
-      for (const q of allQ) {
-        const p = await repo.getParticipants(q.id);
-        allP.push(...p);
-      }
-      const myParticipations = allP.filter((p) => p.userId === auth.user!.id);
-      const myQIds = new Set(myParticipations.map((p) => p.quinielaId));
-      const myQuinielas = allQ.filter((q) => myQIds.has(q.id) || q.createdBy === auth.user!.id);
-
-      const uniqueActiveTournaments = new Map<string, Tournament>();
-      for (const q of myQuinielas) {
-        const t = await repo.getTournamentById(q.tournamentId);
-        if (t && t.status === 'active') {
-          uniqueActiveTournaments.set(t.id, t);
-        }
-      }
-
-      if (uniqueActiveTournaments.size > 0) {
-        const leaguesData = await getLeagues();
-        await Promise.all(
-          Array.from(uniqueActiveTournaments.values()).map(async (t) => {
-            try {
-              await syncTournamentMatches(repo, t, leaguesData.results);
-            } catch (e) {
-              console.warn(`Failed to sync tournament ${t.name}:`, e);
-            }
-          })
-        );
-      }
+      await syncActiveTournamentsForUser(repo, auth.user.id);
     } catch (e) {
       console.warn('Failed sync of active tournaments:', e);
     }
-  }, [repo, auth.user?.id]);
+    if (predictingMatchRef.current) {
+      pendingReloadRef.current = true;
+      return;
+    }
+    await loadData();
+  }, [repo, auth.user?.id, loadData]);
+
+  const closePrediction = useCallback(() => {
+    Keyboard.dismiss();
+    setPredictionModal(null);
+    setMessage(null);
+    setSaving(false);
+    if (pendingReloadRef.current) {
+      pendingReloadRef.current = false;
+      void syncAndLoad();
+    }
+  }, [syncAndLoad]);
 
   useFocusEffect(
     useCallback(() => {
-      if (predictingMatch) return;
-      loadData();
+      if (predictingMatchRef.current) return;
+      syncAndLoad();
 
-      // Configurar sincronización periódica cada 5 minutos (5 * 60 * 1000 ms)
       const intervalId = setInterval(async () => {
-        if (predictingMatch) return;
-        await syncAllActiveTournaments();
-        await loadData();
+        if (predictingMatchRef.current) return;
+        await syncAndLoad();
       }, 5 * 60 * 1000);
 
       return () => clearInterval(intervalId);
-    }, [loadData, predictingMatch, syncAllActiveTournaments])
+    }, [syncAndLoad])
   );
 
   const handleRefresh = useCallback(async () => {
+    if (predictingMatchRef.current) return;
     setRefreshing(true);
-    await syncAllActiveTournaments();
-    await loadData();
-    setRefreshing(false);
-  }, [syncAllActiveTournaments, loadData]);
+    try {
+      await syncAndLoad();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [syncAndLoad]);
 
   const toggleQuinielaExpansion = useCallback(async (qId: string | null) => {
     setExpandedQuiniela(qId);
@@ -196,34 +208,55 @@ export default function PredictionsScreen() {
     }
   }, [quinielas, repo, loadData]);
 
-  const openPrediction = useCallback((matchId: string, _existing?: Prediction) => {
-    setPredictingMatch(matchId);
-    setMessage(null);
+  const openPrediction = useCallback((
+    quiniela: QuinielaWithDetails,
+    match: Match,
+    prediction?: Prediction,
+  ) => {
+    const isBlocked =
+      match.status === 'finished' ||
+      match.status === 'live' ||
+      isMatchStarted(match.matchDate);
+
+    InteractionManager.runAfterInteractions(() => {
+      setPredictionModal({
+        matchId: match.id,
+        quinielaId: quiniela.id,
+        participantId: quiniela.participantId,
+        homeTeam: match.homeTeam,
+        awayTeam: match.awayTeam,
+        stage: match.stage,
+        groupName: match.groupName ?? undefined,
+        matchDate: match.matchDate,
+        accent: (quiniela.accent || 'purple') as NeonAccent,
+        initialHome: prediction?.predictedHomeScore ?? null,
+        initialAway: prediction?.predictedAwayScore ?? null,
+        isBlocked,
+      });
+      setMessage(null);
+    });
   }, []);
 
-  const handleSavePrediction = useCallback(async (quiniela: Quiniela & { participantId: string | null; matches: Match[] }, homeScore: number, awayScore: number) => {
-    if (!quiniela.participantId || !predictingMatch) return;
-    const match = quiniela.matches.find((m) => m.id === predictingMatch);
-    if (match) {
-      const isBlocked = match.status === 'finished' || match.status === 'live' || isMatchStarted(match.matchDate);
-      if (isBlocked) {
-        setMessage('El partido ya ha comenzado o finalizado');
-        return;
-      }
+  const handleSavePrediction = useCallback(async (homeScore: number, awayScore: number) => {
+    if (!predictionModal?.participantId) return;
+    if (predictionModal.isBlocked) {
+      setMessage('El partido ya ha comenzado o finalizado');
+      return;
     }
+    const { matchId, quinielaId, participantId } = predictionModal;
     setSaving(true);
     setMessage(null);
     try {
-      await repo.savePrediction(quiniela.participantId, predictingMatch, homeScore, awayScore);
+      await repo.savePrediction(participantId, matchId, homeScore, awayScore);
       setMessage('Pronóstico guardado');
       setQuinielas((prev) =>
         prev.map((q) => {
-          if (q.id !== quiniela.id) return q;
-          const existing = q.predictions.findIndex((p) => p.matchId === predictingMatch);
+          if (q.id !== quinielaId) return q;
+          const existing = q.predictions.findIndex((p) => p.matchId === matchId);
           const newPred: Prediction = {
             id: existing >= 0 ? q.predictions[existing].id : '',
-            participantId: quiniela.participantId!,
-            matchId: predictingMatch,
+            participantId: participantId!,
+            matchId,
             predictedHomeScore: homeScore,
             predictedAwayScore: awayScore,
             pointsEarned: existing >= 0 ? q.predictions[existing].pointsEarned : 0,
@@ -236,7 +269,7 @@ export default function PredictionsScreen() {
           const allPredictions = q.allPredictions
             ? q.allPredictions.map((ap) => {
                 if (ap.participant.userId !== auth.user!.id) return ap;
-                const idx = ap.predictions.findIndex((p) => p.matchId === predictingMatch);
+                const idx = ap.predictions.findIndex((p) => p.matchId === matchId);
                 const newPreds = [...ap.predictions];
                 if (idx >= 0) {
                   newPreds[idx] = newPred;
@@ -251,17 +284,13 @@ export default function PredictionsScreen() {
         }),
       );
       setTimeout(() => {
-        setPredictingMatch(null);
-        setMessage(null);
+        closePrediction();
       }, 1000);
     } catch (e: any) {
       setMessage(e.message);
-    } finally {
       setSaving(false);
     }
-  }, [predictingMatch, repo]);
-
-  const predictFor = quinielas.find((q) => q.id === expandedQuiniela);
+  }, [predictionModal, repo, auth.user, closePrediction]);
 
   return (
     <ThemedView style={styles.container}>
@@ -269,6 +298,8 @@ export default function PredictionsScreen() {
         <ScrollView
           contentContainerStyle={styles.scroll}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -513,7 +544,7 @@ export default function PredictionsScreen() {
                                                 </View>
 
                                                 <ThemedText style={[Typography.small, { color: theme.textMuted, fontSize: 14, fontWeight: '300' }]}>
-                                                  →
+                                                  <MaterialIcons name="arrow-forward" size={14} color={theme.textMuted} />
                                                 </ThemedText>
 
                                                 <View style={{ 
@@ -612,7 +643,7 @@ export default function PredictionsScreen() {
                                   return (
                                     <Pressable
                                       key={m.id}
-                                      onPress={() => openPrediction(m.id, tPrediction)}
+                                      onPress={() => openPrediction(q, m, tPrediction)}
                                       style={({ pressed }) => ({
                                         backgroundColor: Palette.surface + '40',
                                         borderRadius: BorderRadius.md,
@@ -629,7 +660,7 @@ export default function PredictionsScreen() {
                                         </ThemedText>
                                         {tLive && (
                                           <ThemedText style={[Typography.small, { color: Palette.neonPink, fontWeight: '700', fontSize: 10 }]}>
-                                            ● EN VIVO{m.currentMinute ? ` (${m.currentMinute}')` : ''}
+                                            <MaterialIcons name="fiber-manual-record" size={10} color={Palette.neonPink} /> EN VIVO{m.currentMinute ? ` (${m.currentMinute}')` : ''}
                                           </ThemedText>
                                         )}
                                         {tFinished && (
@@ -789,7 +820,7 @@ export default function PredictionsScreen() {
                                     return (
                                       <Pressable
                                         key={m.id}
-                                        onPress={() => openPrediction(m.id, prediction)}
+                                        onPress={() => openPrediction(q, m, prediction)}
                                         style={({ pressed }) => ({
                                           backgroundColor: Palette.surface + '40',
                                           borderRadius: BorderRadius.md,
@@ -806,7 +837,7 @@ export default function PredictionsScreen() {
                                           </ThemedText>
                                           {isLive && (
                                             <ThemedText style={[Typography.small, { color: Palette.neonPink, fontWeight: '700', fontSize: 10 }]}>
-                                              ● EN VIVO{m.currentMinute ? ` (${m.currentMinute}')` : ''}
+                                              <MaterialIcons name="fiber-manual-record" size={10} color={Palette.neonPink} /> EN VIVO{m.currentMinute ? ` (${m.currentMinute}')` : ''}
                                             </ThemedText>
                                           )}
                                           {isFinished && (
@@ -1044,6 +1075,26 @@ export default function PredictionsScreen() {
                               <ThemedText style={[Typography.headline, { color: Palette.neonYellow, textAlign: 'center', fontFamily: 'monospace', letterSpacing: 4, marginTop: Spacing.one }]}>
                                 {q.inviteCode}
                               </ThemedText>
+                              <Pressable
+                                onPress={() => {
+                                  Share.share({
+                                    message: `Únete a mi quiniela "${q.name}" con el código: ${q.inviteCode}`,
+                                  });
+                                }}
+                                style={({ pressed }) => ({
+                                  flexDirection: 'row',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  gap: Spacing.one,
+                                  marginTop: Spacing.two,
+                                  opacity: pressed ? 0.8 : 1,
+                                })}
+                              >
+                                <MaterialIcons name="share" size={14} color={Palette.neonYellow} />
+                                <ThemedText style={[Typography.small, { color: Palette.neonYellow }]}>
+                                  COMPARTIR
+                                </ThemedText>
+                              </Pressable>
                             </View>
                           )}
                         </View>
@@ -1057,35 +1108,46 @@ export default function PredictionsScreen() {
         </ScrollView>
       </SafeAreaView>
 
-      {predictingMatch && predictFor && (
-        <View style={styles.overlay}>
-          <Pressable
-            style={StyleSheet.absoluteFill}
-            onPress={() => setPredictingMatch(null)}
-          />
-          <View style={{ width: '100%', maxWidth: 450 }}>
-            {(() => {
-              const match = predictFor.matches.find((m) => m.id === predictingMatch);
-              if (!match) return null;
-              const prediction = predictFor.predictions.find((p) => p.matchId === predictingMatch);
-              const isBlocked = match.status === 'finished' || match.status === 'live' || isMatchStarted(match.matchDate);
-              return (
+      <Modal
+        visible={!!predictionModal}
+        transparent
+        animationType="fade"
+        onRequestClose={closePrediction}
+        statusBarTranslucent
+      >
+        <KeyboardAvoidingView
+          style={styles.modalRoot}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          enabled={Platform.OS === 'ios'}
+        >
+          <View style={styles.modalBackdrop}>
+            <Pressable style={StyleSheet.absoluteFillObject} onPress={closePrediction} />
+            <View
+              style={styles.modalContent}
+              onStartShouldSetResponder={() => true}
+            >
+              {predictionModal && (
                 <NeonScoreInput
-                  homeTeam={match.homeTeam}
-                  awayTeam={match.awayTeam}
-                  accent={(predictFor.accent || 'purple') as NeonAccent}
-                  initialHome={prediction?.predictedHomeScore ?? null}
-                  initialAway={prediction?.predictedAwayScore ?? null}
-                  onSave={(h, a) => handleSavePrediction(predictFor, h, a)}
-                  disabled={saving || isBlocked}
+                  key={predictionModal.matchId}
+                  homeTeam={predictionModal.homeTeam}
+                  awayTeam={predictionModal.awayTeam}
+                  stage={predictionModal.stage}
+                  groupName={predictionModal.groupName}
+                  matchDate={predictionModal.matchDate}
+                  accent={predictionModal.accent}
+                  initialHome={predictionModal.initialHome}
+                  initialAway={predictionModal.initialAway}
+                  onSave={handleSavePrediction}
+                  onCancel={closePrediction}
+                  disabled={predictionModal.isBlocked}
                   saving={saving}
                   message={message}
                 />
-              );
-            })()}
+              )}
+            </View>
           </View>
-        </View>
-      )}
+        </KeyboardAvoidingView>
+      </Modal>
     </ThemedView>
   );
 }
@@ -1096,6 +1158,17 @@ const styles = StyleSheet.create({
   scroll: { paddingBottom: BottomTabInset + Spacing.five },
   hero: { padding: Spacing.five, paddingTop: Spacing.six, gap: Spacing.two },
   section: { paddingHorizontal: Spacing.five, gap: Spacing.three },
-  overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: '#000000AA', justifyContent: 'center', alignItems: 'center', padding: Spacing.five, zIndex: 999 },
+  modalRoot: { flex: 1 },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: '#000000D9',
+    justifyContent: 'center',
+    padding: Spacing.five,
+  },
+  modalContent: {
+    width: '100%',
+    maxWidth: MaxContentWidth,
+    alignSelf: 'center',
+  },
   predictionCard: { borderRadius: BorderRadius.lg, borderWidth: 1, padding: Spacing.five },
 });

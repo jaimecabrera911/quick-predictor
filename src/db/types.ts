@@ -57,6 +57,8 @@ export interface Quiniela {
   accessType: QuinielaAccess;
   inviteCode: string | null;
   scoringRules: ScoringRules;
+  prize: number | null;
+  entryFee: number | null;
   createdBy: string;
   createdAt: string;
 }
@@ -66,6 +68,7 @@ export interface Participant {
   quinielaId: string;
   userId: string;
   totalPoints: number;
+  paid: boolean;
   joinedAt: string;
   user?: User;
 }
@@ -102,6 +105,8 @@ export interface CreateQuinielaDTO {
   deadline?: string | null;
   accessType: QuinielaAccess;
   scoringRules: ScoringRules;
+  prize?: number | null;
+  entryFee?: number | null;
   createdBy?: string;
 }
 

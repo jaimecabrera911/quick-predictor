@@ -32,11 +32,14 @@ export interface IDataRepository {
     name: string,
     description: string,
     deadline: string | null,
-    scoringRules: ScoringRules
+    scoringRules: ScoringRules,
+    prize: number | null,
+    entryFee: number | null
   ): Promise<Quiniela>;
   deleteQuiniela(id: string): Promise<void>;
   joinQuiniela(code: string, userId: string): Promise<Quiniela | null>;
   leaveQuiniela(quinielaId: string, userId: string): Promise<void>;
+  setParticipantPaid(participantId: string, paid: boolean): Promise<void>;
 
   getParticipants(quinielaId: string): Promise<Participant[]>;
   getStandings(quinielaId: string): Promise<StandingEntry[]>;

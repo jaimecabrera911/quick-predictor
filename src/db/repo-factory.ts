@@ -1,6 +1,6 @@
-import { SQLiteRepository } from './sqlite-repository';
+import { SupabaseRepository } from './supabase-repository';
 import type { IDataRepository } from './repository';
 
 export function createRepository(): IDataRepository {
-  return new SQLiteRepository();
+  return new SupabaseRepository();
 }

@@ -47,6 +47,74 @@ export class SupabaseRepository implements IDataRepository {
         createdAt: u.created_at ?? new Date().toISOString(),
       };
     }
+    await this.seedDemoJapanTunisiaPrediction();
+  }
+
+  private isJapanTunisiaMatch(homeTeam: string, awayTeam: string): boolean {
+    const isJapan = (name: string) => /japan|japón|japon/i.test(name);
+    const isTunisia = (name: string) => /tunis|túnez|tunez/i.test(name);
+    return (
+      (isJapan(homeTeam) && isTunisia(awayTeam)) ||
+      (isTunisia(homeTeam) && isJapan(awayTeam))
+    );
+  }
+
+  private japanTunisiaScores(homeTeam: string): { home: number; away: number } {
+    const isJapan = (name: string) => /japan|japón|japon/i.test(name);
+    if (isJapan(homeTeam)) return { home: 2, away: 0 };
+    return { home: 0, away: 2 };
+  }
+
+  /** Seed: demo@quinielapp.com pronóstico Japón 2–0 Túnez (idempotente). */
+  private async seedDemoJapanTunisiaPrediction(): Promise<void> {
+    try {
+      const { data: demoUser } = await this.sb
+        .from('users')
+        .select('id')
+        .eq('email', 'demo@quinielapp.com')
+        .maybeSingle();
+      if (!demoUser) return;
+
+      const { data: matches } = await this.sb.from('matches').select('id, home_team, away_team, tournament_id');
+      const match = (matches ?? []).find((m) => this.isJapanTunisiaMatch(m.home_team, m.away_team));
+      if (!match) return;
+
+      const { data: participants } = await this.sb
+        .from('participants')
+        .select('id')
+        .eq('user_id', demoUser.id);
+      if (!participants?.length) return;
+
+      const scores = this.japanTunisiaScores(match.home_team);
+
+      for (const participant of participants) {
+        const { data: existing } = await this.sb
+          .from('predictions')
+          .select('id, points_earned')
+          .eq('participant_id', participant.id)
+          .eq('match_id', match.id)
+          .maybeSingle();
+
+        await this.sb.from('predictions').upsert(
+          {
+            id: existing?.id ?? genId(),
+            participant_id: participant.id,
+            match_id: match.id,
+            predicted_home_score: scores.home,
+            predicted_away_score: scores.away,
+            points_earned: existing?.points_earned ?? 0,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'participant_id,match_id' },
+        );
+      }
+
+      if (match.tournament_id) {
+        await this.recalculateScoresForTournament(match.tournament_id);
+      }
+    } catch (e: any) {
+      console.warn('[seed] demo Japan–Tunisia prediction:', e.message);
+    }
   }
 
   private async seedDemoUsers(): Promise<void> {
@@ -288,13 +356,93 @@ export class SupabaseRepository implements IDataRepository {
         await this.sb.from('matches').delete().in('id', dupIds);
       }
     }
+
+    await this.recalculateScoresForTournament(tournamentId);
+  }
+
+  private async recalculateScoresForTournament(tournamentId: string): Promise<void> {
+    const { data: quinielas, error: qErr } = await this.sb
+      .from('quinielas')
+      .select('*')
+      .eq('tournament_id', tournamentId);
+    if (qErr) throw qErr;
+
+    const { data: matches, error: mErr } = await this.sb
+      .from('matches')
+      .select('*')
+      .eq('tournament_id', tournamentId);
+    if (mErr) throw mErr;
+
+    const matchesMap = new Map((matches ?? []).map((m) => [m.id, m]));
+
+    for (const q of quinielas ?? []) {
+      const scoringRules = {
+        pointsExactScore: q.points_exact_score,
+        pointsWinner: q.points_winner,
+        pointsGoal: q.points_goal,
+        pointsGoalDiff: q.points_goal_diff,
+      };
+
+      const { data: participants } = await this.sb
+        .from('participants')
+        .select('*')
+        .eq('quiniela_id', q.id);
+
+      for (const p of participants ?? []) {
+        const { data: predictions } = await this.sb
+          .from('predictions')
+          .select('*')
+          .eq('participant_id', p.id);
+
+        let participantTotalPoints = 0;
+
+        for (const pred of predictions ?? []) {
+          const match = matchesMap.get(pred.match_id);
+          let points = 0;
+
+          if (
+            match &&
+            (match.status === 'finished' || match.status === 'live') &&
+            match.home_score !== null &&
+            match.away_score !== null
+          ) {
+            points = this.calculatePoints(
+              scoringRules,
+              pred.predicted_home_score,
+              pred.predicted_away_score,
+              match.home_score,
+              match.away_score,
+            );
+          }
+
+          await this.sb.from('predictions').update({ points_earned: points }).eq('id', pred.id);
+          participantTotalPoints += points;
+        }
+
+        await this.sb
+          .from('participants')
+          .update({ total_points: participantTotalPoints })
+          .eq('id', p.id);
+      }
+    }
   }
 
   async updateMatchScore(matchId: string, homeScore: number, awayScore: number): Promise<void> {
+    const { data: match, error: fetchError } = await this.sb
+      .from('matches')
+      .select('tournament_id')
+      .eq('id', matchId)
+      .single();
+    if (fetchError) throw fetchError;
+
     const { error } = await this.sb.from('matches')
       .update({ home_score: homeScore, away_score: awayScore, status: 'finished' })
       .eq('id', matchId);
     if (error) throw error;
+
+    if (match?.tournament_id) {
+      await this.recalculateScoresForTournament(match.tournament_id);
+    }
   }
 
   // ─── Quinielas ─────────────────────────────────────────

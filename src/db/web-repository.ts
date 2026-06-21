@@ -437,7 +437,12 @@ export class WebRepository implements IDataRepository {
           const match = matchesMap.get(pred.matchId);
           let points = 0;
           
-          if (match && match.status === 'finished' && match.homeScore !== null && match.awayScore !== null) {
+          if (
+            match &&
+            (match.status === 'finished' || match.status === 'live') &&
+            match.homeScore !== null &&
+            match.awayScore !== null
+          ) {
             points = this.calculatePoints(
               q.scoringRules,
               pred.predictedHomeScore,

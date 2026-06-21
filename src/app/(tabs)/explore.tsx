@@ -26,6 +26,7 @@ import { Image } from 'expo-image';
 import { MaterialIcons } from '@expo/vector-icons';
 import { getTeamLogo, getLeagueLogo } from '@/utils/logos';
 import { parseMatchDate, formatMatchDateTime, isMatchStarted, getMatchLocalDateString, getTodayDateString, compareMatchDatesAsc, isMatchInTodaySection } from '@/utils/date';
+import { matchHasScoreForScoring } from '@/utils/scoring';
 
 export default function PredictionsScreen() {
   const theme = useTheme();
@@ -499,6 +500,9 @@ export default function PredictionsScreen() {
                                           const matchDate = parseMatchDate(match.matchDate);
                                           const isFinished = match.status === 'finished';
                                           const isLive = match.status === 'live';
+                                          const hasScoring = matchHasScoreForScoring(match.status, match.homeScore, match.awayScore);
+                                          const pointsHighlight = hasScoring && pred.pointsEarned > 0;
+                                          const pointsColor = isLive ? Palette.neonPink : Palette.neonGreen;
                                           return (
                                             <View key={pred.id} style={{ 
                                               backgroundColor: Palette.surface + '30',
@@ -572,20 +576,20 @@ export default function PredictionsScreen() {
                                                 </View>
 
                                                 <View style={{ 
-                                                  backgroundColor: isFinished && pred.pointsEarned > 0 ? Palette.neonGreen + '20' : theme.textMuted + '15',
+                                                  backgroundColor: pointsHighlight ? pointsColor + '20' : theme.textMuted + '15',
                                                   borderRadius: BorderRadius.sm,
                                                   borderWidth: 1,
-                                                  borderColor: isFinished && pred.pointsEarned > 0 ? Palette.neonGreen + '40' : 'transparent',
+                                                  borderColor: pointsHighlight ? pointsColor + '40' : 'transparent',
                                                   paddingVertical: Spacing.one,
                                                   paddingHorizontal: Spacing.two,
                                                   alignItems: 'center',
                                                   minWidth: 50,
                                                 }}>
                                                   <ThemedText style={[Typography.small, { color: theme.textMuted, fontSize: 8, letterSpacing: 0.5, marginBottom: 1 }]}>
-                                                    PTS
+                                                    PTS{isLive ? ' · VIVO' : ''}
                                                   </ThemedText>
-                                                  <ThemedText style={[Typography.body, { color: isFinished && pred.pointsEarned > 0 ? Palette.neonGreen : theme.textMuted, fontWeight: '700', fontSize: 16 }]}>
-                                                    {isFinished ? `+${pred.pointsEarned}` : '–'}
+                                                  <ThemedText style={[Typography.body, { color: hasScoring ? pointsColor : theme.textMuted, fontWeight: '700', fontSize: 16 }]}>
+                                                    {hasScoring ? `+${pred.pointsEarned}` : '–'}
                                                   </ThemedText>
                                                 </View>
                                               </View>
@@ -732,10 +736,27 @@ export default function PredictionsScreen() {
                                                 {tPrediction ? `${tPrediction.predictedHomeScore} – ${tPrediction.predictedAwayScore}` : 'Ninguno'}
                                               </ThemedText>
                                             </View>
-                                            {tPrediction && tPrediction.pointsEarned > 0 && (
-                                              <View style={{ backgroundColor: Palette.neonGreen + '15', borderRadius: BorderRadius.sm, paddingHorizontal: Spacing.two, paddingVertical: 2 }}>
-                                                <ThemedText style={[Typography.small, { color: Palette.neonGreen, fontWeight: '700', fontSize: 10 }]}>
-                                                  +{tPrediction.pointsEarned} PTS
+                                            {tPrediction && matchHasScoreForScoring(m.status, m.homeScore, m.awayScore) && (
+                                              <View style={{
+                                                backgroundColor: tLive
+                                                  ? Palette.neonPink + '15'
+                                                  : tPrediction.pointsEarned > 0
+                                                    ? Palette.neonGreen + '15'
+                                                    : theme.textMuted + '15',
+                                                borderRadius: BorderRadius.sm,
+                                                paddingHorizontal: Spacing.two,
+                                                paddingVertical: 2,
+                                              }}>
+                                                <ThemedText style={[Typography.small, {
+                                                  color: tLive
+                                                    ? Palette.neonPink
+                                                    : tPrediction.pointsEarned > 0
+                                                      ? Palette.neonGreen
+                                                      : theme.textMuted,
+                                                  fontWeight: '700',
+                                                  fontSize: 10,
+                                                }]}>
+                                                  +{tPrediction.pointsEarned} PTS{tLive ? ' · VIVO' : ''}
                                                 </ThemedText>
                                               </View>
                                             )}
@@ -928,19 +949,27 @@ export default function PredictionsScreen() {
                                                 </ThemedText>
                                               </View>
                                               
-                                              {prediction && (
+                                              {prediction && matchHasScoreForScoring(m.status, m.homeScore, m.awayScore) && (
                                                 <View style={{ 
-                                                  backgroundColor: prediction.pointsEarned > 0 ? Palette.neonGreen + '15' : theme.textMuted + '15',
+                                                  backgroundColor: isLive
+                                                    ? Palette.neonPink + '15'
+                                                    : prediction.pointsEarned > 0
+                                                      ? Palette.neonGreen + '15'
+                                                      : theme.textMuted + '15',
                                                   borderRadius: BorderRadius.sm,
                                                   paddingHorizontal: Spacing.two,
                                                   paddingVertical: 2
                                                 }}>
                                                   <ThemedText style={[Typography.small, { 
-                                                    color: prediction.pointsEarned > 0 ? Palette.neonGreen : theme.textMuted,
+                                                    color: isLive
+                                                      ? Palette.neonPink
+                                                      : prediction.pointsEarned > 0
+                                                        ? Palette.neonGreen
+                                                        : theme.textMuted,
                                                     fontWeight: '700',
                                                     fontSize: 10
                                                   }]}>
-                                                    +{prediction.pointsEarned} PTS
+                                                    +{prediction.pointsEarned} PTS{isLive ? ' · VIVO' : ''}
                                                   </ThemedText>
                                                 </View>
                                               )}
@@ -997,9 +1026,17 @@ export default function PredictionsScreen() {
                                                         <ThemedText style={[Typography.caption, { color: o.pred ? theme.text : theme.textMuted, fontWeight: '600' }]}>
                                                           {o.pred ? `${o.pred.predictedHomeScore} – ${o.pred.predictedAwayScore}` : 'Ninguno'}
                                                         </ThemedText>
-                                                        {o.pred && o.pred.pointsEarned !== undefined && isFinished && (
-                                                          <ThemedText style={[Typography.caption, { color: o.pred.pointsEarned > 0 ? Palette.neonGreen : theme.textMuted, fontWeight: '700', fontSize: 10 }]}>
-                                                            (+{o.pred.pointsEarned} pts)
+                                                        {o.pred && o.pred.pointsEarned !== undefined && matchHasScoreForScoring(m.status, m.homeScore, m.awayScore) && (
+                                                          <ThemedText style={[Typography.caption, {
+                                                            color: isLive
+                                                              ? Palette.neonPink
+                                                              : o.pred.pointsEarned > 0
+                                                                ? Palette.neonGreen
+                                                                : theme.textMuted,
+                                                            fontWeight: '700',
+                                                            fontSize: 10,
+                                                          }]}>
+                                                            (+{o.pred.pointsEarned} pts{isLive ? ' · vivo' : ''})
                                                           </ThemedText>
                                                         )}
                                                       </View>

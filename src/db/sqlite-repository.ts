@@ -575,7 +575,12 @@ export class SQLiteRepository implements IDataRepository {
           const match = matchesMap.get(pred.match_id);
           let points = 0;
           
-          if (match && match.status === 'finished' && match.home_score !== null && match.away_score !== null) {
+          if (
+            match &&
+            (match.status === 'finished' || match.status === 'live') &&
+            match.home_score !== null &&
+            match.away_score !== null
+          ) {
             points = this.calculatePoints(
               scoringRules,
               pred.predicted_home_score,

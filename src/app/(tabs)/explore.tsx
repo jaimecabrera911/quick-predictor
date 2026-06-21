@@ -25,7 +25,7 @@ import { syncTournamentMatches, syncActiveTournamentsForUser } from '@/services'
 import { Image } from 'expo-image';
 import { MaterialIcons } from '@expo/vector-icons';
 import { getTeamLogo, getLeagueLogo } from '@/utils/logos';
-import { parseMatchDate, formatMatchDateTime, isMatchStarted, getMatchLocalDateString, getTodayDateString, compareMatchDatesAsc } from '@/utils/date';
+import { parseMatchDate, formatMatchDateTime, isMatchStarted, getMatchLocalDateString, getTodayDateString, compareMatchDatesAsc, isMatchInTodaySection } from '@/utils/date';
 
 export default function PredictionsScreen() {
   const theme = useTheme();
@@ -602,11 +602,19 @@ export default function PredictionsScreen() {
 
                           {(() => {
                             const todayStr = getTodayDateString();
-                            const todayMatches = q.matches.filter(m => {
-                              const md = getMatchLocalDateString(m.matchDate);
-                              return md === todayStr;
-                            });
+                            const todayMatches = q.matches
+                              .filter((m) => isMatchInTodaySection(m.matchDate, m.status))
+                              .sort((a, b) => {
+                                const aLive = a.status === 'live' ? 0 : 1;
+                                const bLive = b.status === 'live' ? 0 : 1;
+                                if (aLive !== bLive) return aLive - bLive;
+                                return compareMatchDatesAsc(a.matchDate, b.matchDate);
+                              });
                             if (todayMatches.length === 0) return null;
+
+                            const hasLiveFromOtherDay = todayMatches.some(
+                              (m) => m.status === 'live' && getMatchLocalDateString(m.matchDate) !== todayStr,
+                            );
 
                             return (
                               <View style={{ marginBottom: Spacing.three }}>
@@ -627,7 +635,9 @@ export default function PredictionsScreen() {
                                   })}
                                 >
                                   <ThemedText style={[Typography.small, { color: Palette.neonGreen, letterSpacing: 1, fontWeight: '700' }]}>
-                                    PARTIDOS DE HOY ({todayMatches.length})
+                                    {hasLiveFromOtherDay
+                                      ? `HOY Y EN VIVO (${todayMatches.length})`
+                                      : `PARTIDOS DE HOY (${todayMatches.length})`}
                                   </ThemedText>
                                   <ThemedText style={[Typography.small, { color: Palette.neonGreen, fontWeight: '700', fontSize: 10 }]}>
                                     {expandedTodayMatches ? 'MINIMIZAR [−]' : 'EXPANDIR [+]'}
@@ -639,6 +649,8 @@ export default function PredictionsScreen() {
                                   const tLive = m.status === 'live';
                                   const tStarted = isMatchStarted(m.matchDate);
                                   const tBlocked = tFinished || tLive || tStarted;
+                                  const matchDay = getMatchLocalDateString(m.matchDate);
+                                  const isKickoffToday = matchDay === todayStr;
 
                                   return (
                                     <Pressable
@@ -657,6 +669,7 @@ export default function PredictionsScreen() {
                                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: Spacing.two }}>
                                         <ThemedText style={[Typography.small, { color: theme.textMuted, fontSize: 10 }]}>
                                           {m.stage.toUpperCase()} {m.groupName ? `· GRUPO ${m.groupName}` : ''}
+                                          {!isKickoffToday && tLive ? ` · ${formatMatchDateTime(m.matchDate)}` : ''}
                                         </ThemedText>
                                         {tLive && (
                                           <ThemedText style={[Typography.small, { color: Palette.neonPink, fontWeight: '700', fontSize: 10 }]}>

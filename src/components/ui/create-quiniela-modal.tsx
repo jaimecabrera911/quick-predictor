@@ -6,6 +6,7 @@ import {
   Modal,
   TextInput,
   Platform,
+  ScrollView,
 } from 'react-native';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -51,6 +52,20 @@ interface CreateQuinielaModalProps {
     };
   }) => Promise<Quiniela>;
   createdQuiniela: Quiniela | null;
+  initialData?: Quiniela | null;
+  onUpdate?: (data: {
+    name: string;
+    description: string;
+    deadline: string | null;
+    prize: number | null;
+    entryFee: number | null;
+    scoringRules: {
+      pointsExactScore: number;
+      pointsWinner: number;
+      pointsGoal: number;
+      pointsGoalDiff: number;
+    };
+  }) => Promise<void>;
 }
 
 export function CreateQuinielaModal({
@@ -59,8 +74,11 @@ export function CreateQuinielaModal({
   onClose,
   onCreate,
   createdQuiniela,
+  initialData,
+  onUpdate,
 }: CreateQuinielaModalProps) {
   const theme = useTheme();
+  const isEditing = !!initialData;
   const [name, setName] = useState('');
   const [desc, setDesc] = useState('');
   const [deadlineDate, setDeadlineDate] = useState<Date | null>(null);
@@ -76,23 +94,36 @@ export function CreateQuinielaModal({
 
   useEffect(() => {
     if (visible) {
-      setName('');
-      setDesc('');
-      setDeadlineDate(null);
+      if (initialData) {
+        setName(initialData.name);
+        setDesc(initialData.description || '');
+        setDeadlineDate(initialData.deadline ? new Date(initialData.deadline) : null);
+        setPrizeRaw(initialData.prize != null ? initialData.prize.toString() : '');
+        setFeeRaw(initialData.entryFee != null ? initialData.entryFee.toString() : '');
+        setRulesExact(initialData.scoringRules.pointsExactScore.toString());
+        setRulesWinner(initialData.scoringRules.pointsWinner.toString());
+        setRulesGoal(initialData.scoringRules.pointsGoal.toString());
+        setRulesGoalDiff(initialData.scoringRules.pointsGoalDiff.toString());
+      } else {
+        setName('');
+        setDesc('');
+        setDeadlineDate(null);
+        setPrizeRaw('');
+        setFeeRaw('');
+        setRulesExact('5');
+        setRulesWinner('2');
+        setRulesGoal('2');
+        setRulesGoalDiff('1');
+      }
       setShowDatePicker(false);
-      setPrizeRaw('');
-      setFeeRaw('');
-      setRulesExact('5');
-      setRulesWinner('2');
-      setRulesGoal('2');
-      setRulesGoalDiff('1');
       setError(null);
     }
-  }, [visible]);
+  }, [visible, initialData]);
 
   const accent = (tournament?.accent || 'green') as NeonAccent;
   const accentColor = AccentMap[accent]?.main || Palette.neonGreen;
   const accentDim = AccentMap[accent]?.dim || Palette.greenDim;
+  const accentBg = accentColor + '18';
 
   const formatDate = (date: Date): string => {
     const y = date.getFullYear();
@@ -117,7 +148,7 @@ export function CreateQuinielaModal({
     try {
       const prizeNum = prizeRaw ? parseFloat(parseFormattedNumber(prizeRaw)) : null;
       const feeNum = feeRaw ? parseFloat(parseFormattedNumber(feeRaw)) : null;
-      const q = await onCreate({
+      const data = {
         name: name.trim(),
         description: desc.trim(),
         deadline: deadlineDate ? deadlineDate.toISOString() : null,
@@ -129,7 +160,12 @@ export function CreateQuinielaModal({
           pointsGoal: parseInt(rulesGoal, 10) || 2,
           pointsGoalDiff: parseInt(rulesGoalDiff, 10) || 1,
         },
-      });
+      };
+      if (isEditing && onUpdate) {
+        await onUpdate(data);
+      } else {
+        await onCreate(data);
+      }
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -141,7 +177,7 @@ export function CreateQuinielaModal({
 
   return (
     <Modal
-      visible={visible && !createdQuiniela}
+      visible={visible && (isEditing || !createdQuiniela)}
       transparent
       animationType="fade"
       onRequestClose={onClose}
@@ -149,7 +185,11 @@ export function CreateQuinielaModal({
       <View style={styles.overlay}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         <View style={[styles.container, { backgroundColor: theme.surface, borderColor: theme.surfaceBorder }]}>
-          {/* Hero Section */}
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="always"
+            contentContainerStyle={styles.scrollContent}
+          >
           <View style={styles.heroSection}>
             <View style={[styles.heroGradient, { backgroundColor: accentDim }]} />
             <View style={styles.heroContent}>
@@ -163,7 +203,7 @@ export function CreateQuinielaModal({
                   {tournament.name.toUpperCase()}
                 </ThemedText>
                 <ThemedText style={[Typography.headline, { color: theme.text, marginTop: Spacing.one }]}>
-                  {name.trim() || 'Nueva Quiniela'}
+                  {name.trim() || (isEditing ? 'Editar Quiniela' : 'Nueva Quiniela')}
                 </ThemedText>
               </View>
             </View>
@@ -290,19 +330,28 @@ export function CreateQuinielaModal({
               ]}
             >
               <ThemedText style={[Typography.headline, { color: Palette.black, fontWeight: '700', letterSpacing: 1.5 }]}>
-                {creating ? 'CREANDO...' : 'CREAR QUINIELA'}
+                {creating ? 'GUARDANDO...' : (isEditing ? 'GUARDAR CAMBIOS' : 'CREAR QUINIELA')}
               </ThemedText>
             </Pressable>
 
             <Pressable
               onPress={onClose}
-              style={styles.cancelButton}
+              style={({ pressed }) => ({
+                marginTop: Spacing.three,
+                borderRadius: BorderRadius.md,
+                borderWidth: 1,
+                borderColor: accentColor + '40',
+                backgroundColor: pressed ? accentBg : 'transparent',
+                paddingVertical: Spacing.three,
+                alignItems: 'center',
+              })}
             >
-              <ThemedText style={[Typography.caption, { color: theme.textMuted }]}>
-                Cancelar
+              <ThemedText style={[Typography.small, { color: accentColor, fontWeight: '600', letterSpacing: 1 }]}>
+                CANCELAR
               </ThemedText>
             </Pressable>
           </View>
+          </ScrollView>
         </View>
       </View>
     </Modal>
@@ -383,6 +432,9 @@ const styles = StyleSheet.create({
     padding: Spacing.four,
     paddingTop: 0,
   },
+  scrollContent: {
+    paddingBottom: Spacing.four,
+  },
   section: {
     marginBottom: Spacing.four,
   },
@@ -434,10 +486,6 @@ const styles = StyleSheet.create({
   createButton: {
     borderRadius: BorderRadius.md,
     paddingVertical: Spacing.four,
-    alignItems: 'center',
-  },
-  cancelButton: {
-    marginTop: Spacing.three,
     alignItems: 'center',
   },
 });

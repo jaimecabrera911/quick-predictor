@@ -55,6 +55,26 @@ export function getTodayDateString(): string {
   return `${y}-${m}-${day}`;
 }
 
+type MatchDayStatus = 'scheduled' | 'live' | 'finished';
+
+/**
+ * Matches shown in the "today" section: kickoff today, live now, or recently
+ * started overnight games still in progress (e.g. 23:00 kickoff, now past midnight).
+ */
+export function isMatchInTodaySection(
+  matchDate: string,
+  status: MatchDayStatus,
+): boolean {
+  if (getMatchLocalDateString(matchDate) === getTodayDateString()) return true;
+  if (status === 'live') return true;
+  if (status !== 'finished' && isMatchStarted(matchDate)) {
+    const hoursSinceKickoff =
+      (Date.now() - parseMatchDate(matchDate).getTime()) / (1000 * 60 * 60);
+    return hoursSinceKickoff <= 24;
+  }
+  return false;
+}
+
 /**
  * Sort comparison function for match dates (ascending).
  */

@@ -64,15 +64,6 @@ export default function TorneosScreen() {
   const [userQuinielasLoading, setUserQuinielasLoading] = useState(true);
 
   const [editingQuiniela, setEditingQuiniela] = useState<Quiniela | null>(null);
-  const [editName, setEditName] = useState('');
-  const [editDesc, setEditDesc] = useState('');
-  const [editDeadline, setEditDeadline] = useState('');
-  const [editPrize, setEditPrize] = useState('');
-  const [editFee, setEditFee] = useState('');
-  const [editRulesExact, setEditRulesExact] = useState('5');
-  const [editRulesWinner, setEditRulesWinner] = useState('2');
-  const [editRulesGoal, setEditRulesGoal] = useState('2');
-  const [editRulesGoalDiff, setEditRulesGoalDiff] = useState('1');
 
   const loadData = useCallback(async () => {
     try {
@@ -144,34 +135,36 @@ export default function TorneosScreen() {
     }
   }, [joinCode, auth.user, repo]);
 
-  const handleUpdateQuiniela = useCallback(async () => {
-    if (!editingQuiniela || !editName.trim() || !auth.user) return;
+  const handleUpdateQuiniela = useCallback(async (data: {
+    name: string;
+    description: string;
+    deadline: string | null;
+    prize: number | null;
+    entryFee: number | null;
+    scoringRules: {
+      pointsExactScore: number;
+      pointsWinner: number;
+      pointsGoal: number;
+      pointsGoalDiff: number;
+    };
+  }) => {
+    if (!editingQuiniela || !auth.user) return;
     try {
-      const deadlineVal = editDeadline.trim() ? new Date(editDeadline.trim()).toISOString() : null;
-      if (editDeadline.trim() && isNaN(new Date(editDeadline.trim()).getTime())) {
-        setError('Fecha límite inválida (usa formato YYYY-MM-DD)');
-        return;
-      }
       const updated = await repo.updateQuiniela(
         editingQuiniela.id,
-        editName.trim(),
-        editDesc.trim(),
-        deadlineVal,
-        {
-          pointsExactScore: parseInt(editRulesExact, 10) || 5,
-          pointsWinner: parseInt(editRulesWinner, 10) || 2,
-          pointsGoal: parseInt(editRulesGoal, 10) || 2,
-          pointsGoalDiff: parseInt(editRulesGoalDiff, 10) || 1,
-        },
-        editPrize.trim() ? parseFloat(editPrize.trim()) : null,
-        editFee.trim() ? parseFloat(editFee.trim()) : null
+        data.name,
+        data.description,
+        data.deadline,
+        data.scoringRules,
+        data.prize,
+        data.entryFee
       );
       setUserQuinielas((prev) => prev.map((q) => q.id === updated.id ? updated : q));
       setEditingQuiniela(null);
     } catch (e: any) {
       setError(e.message);
     }
-  }, [editingQuiniela, editName, editDesc, editDeadline, editPrize, editFee, editRulesExact, editRulesWinner, editRulesGoal, editRulesGoalDiff, repo, auth.user]);
+  }, [editingQuiniela, repo, auth.user]);
 
   const handleDeleteQuiniela = useCallback(async (quinielaId: string) => {
     try {
@@ -534,16 +527,6 @@ export default function TorneosScreen() {
                                 <Pressable
                                   onPress={() => {
                                     setEditingQuiniela(q);
-                                    setEditName(q.name);
-                                    setEditDesc(q.description || '');
-                                    setEditDeadline(q.deadline ? new Date(q.deadline).toISOString().split('T')[0] : '');
-                                    setEditPrize(q.prize != null ? q.prize.toString() : '');
-                                    setEditFee(q.entryFee != null ? q.entryFee.toString() : '');
-                                    setEditRulesExact(q.scoringRules.pointsExactScore.toString());
-                                    setEditRulesWinner(q.scoringRules.pointsWinner.toString());
-                                    setEditRulesGoal(q.scoringRules.pointsGoal.toString());
-                                    setEditRulesGoalDiff(q.scoringRules.pointsGoalDiff.toString());
-                                    setError(null);
                                   }}
                                   style={({ pressed }) => ({
                                     flex: 1,
@@ -730,144 +713,15 @@ export default function TorneosScreen() {
         </View>
       </Modal>
 
-      <Modal
+      <CreateQuinielaModal
         visible={!!editingQuiniela}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setEditingQuiniela(null)}
-      >
-        <View style={styles.modalOverlay}>
-          <Pressable
-            style={StyleSheet.absoluteFill}
-            onPress={() => setEditingQuiniela(null)}
-          />
-          <View
-            style={[
-              styles.modalContent,
-              { backgroundColor: theme.surface, borderColor: theme.surfaceBorder },
-            ]}
-          >
-            <View
-              style={{
-                width: 40,
-                height: 3,
-                backgroundColor: Palette.neonCyan,
-                borderRadius: 2,
-                marginBottom: Spacing.four,
-                alignSelf: 'center',
-              }}
-            />
-
-            <ThemedText style={[Typography.headline, { color: theme.text, marginBottom: Spacing.one }]}>
-              Editar Quiniela
-            </ThemedText>
-            <ThemedText style={[Typography.small, { color: theme.textMuted, marginBottom: Spacing.five }]}>
-              Configuración y Reglas
-            </ThemedText>
-
-            <ThemedTextInput
-              value={editName}
-              onChangeText={setEditName}
-              placeholder="Nombre de tu quiniela"
-              accent="cyan"
-            />
-
-            <ThemedTextInput
-              value={editDesc}
-              onChangeText={setEditDesc}
-              placeholder="Descripción (opcional)"
-              multiline
-              numberOfLines={3}
-              style={{ minHeight: 60, textAlignVertical: 'top' }}
-              accent="cyan"
-            />
-
-            <ThemedTextInput
-              value={editDeadline}
-              onChangeText={setEditDeadline}
-              placeholder="Fecha límite (YYYY-MM-DD, opcional)"
-              accent="cyan"
-            />
-
-            <View style={{ flexDirection: 'row', gap: Spacing.two }}>
-              <View style={{ flex: 1 }}>
-                <ThemedTextInput
-                  value={editPrize}
-                  onChangeText={setEditPrize}
-                  placeholder="Premio ($, opcional)"
-                  keyboardType="decimal-pad"
-                  accent="cyan"
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <ThemedTextInput
-                  value={editFee}
-                  onChangeText={setEditFee}
-                  placeholder="Cuota ($, opcional)"
-                  keyboardType="decimal-pad"
-                  accent="cyan"
-                />
-              </View>
-            </View>
-
-            <ThemedText style={[Typography.small, { color: theme.textMuted, letterSpacing: 1, marginBottom: Spacing.two }]}>
-              REGLAS DE PUNTUACIÓN
-            </ThemedText>
-
-            <View style={{ flexDirection: 'row', gap: Spacing.two, marginBottom: Spacing.four }}>
-              {[
-                { label: 'Exacto', value: editRulesExact, setter: setEditRulesExact },
-                { label: 'Ganador', value: editRulesWinner, setter: setEditRulesWinner },
-                { label: 'Gol', value: editRulesGoal, setter: setEditRulesGoal },
-                { label: 'Dif.', value: editRulesGoalDiff, setter: setEditRulesGoalDiff },
-              ].map((rule) => (
-                <View key={rule.label} style={{ flex: 1 }}>
-                  <ThemedTextInput
-                    label={rule.label}
-                    value={rule.value}
-                    onChangeText={rule.setter}
-                    keyboardType="number-pad"
-                    accent="cyan"
-                    style={{ textAlign: 'center' }}
-                    containerStyle={{ marginBottom: 0 }}
-                  />
-                </View>
-              ))}
-            </View>
-
-            {error && (
-              <ThemedText style={[Typography.small, { color: Palette.neonPink, marginBottom: Spacing.three }]}>
-                {error}
-              </ThemedText>
-            )}
-
-            <Pressable
-              onPress={handleUpdateQuiniela}
-              disabled={!editName.trim()}
-              style={({ pressed }) => ({
-                backgroundColor: Palette.neonCyan,
-                borderRadius: BorderRadius.md,
-                paddingVertical: Spacing.four,
-                alignItems: 'center',
-                opacity: pressed || !editName.trim() ? 0.8 : 1,
-              })}
-            >
-              <ThemedText style={[Typography.headline, { color: Palette.black, fontWeight: '700', letterSpacing: 2 }]}>
-                GUARDAR CAMBIOS
-              </ThemedText>
-            </Pressable>
-
-            <Pressable
-              onPress={() => setEditingQuiniela(null)}
-              style={{ marginTop: Spacing.three, alignItems: 'center' }}
-            >
-              <ThemedText style={[Typography.caption, { color: theme.textMuted }]}>
-                Cancelar
-              </ThemedText>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
+        tournament={tournaments.find((t) => t.id === editingQuiniela?.tournamentId) || null}
+        onClose={() => setEditingQuiniela(null)}
+        onCreate={async () => { throw new Error('No implementado'); }}
+        createdQuiniela={null}
+        initialData={editingQuiniela}
+        onUpdate={handleUpdateQuiniela}
+      />
     </ThemedView>
   );
 }

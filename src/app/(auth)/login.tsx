@@ -11,6 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { AppLogo } from '@/components/ui/app-logo';
 import { ThemedTextInput } from '@/components/ui/themed-text-input';
 import { Typography } from '@/constants/typography';
 import {
@@ -59,10 +60,11 @@ export default function LoginScreen() {
         >
           <SafeAreaView style={styles.safeArea}>
             <View style={styles.hero}>
+              <AppLogo variant="full" />
               <ThemedText
                 style={[
                   Typography.caption,
-                  { color: theme.neonGreen, letterSpacing: 4 },
+                  { color: theme.neonGreen, letterSpacing: 4, marginTop: Spacing.three },
                 ]}
               >
                 {mode === 'login' ? 'INICIAR SESIÓN' : 'CREAR CUENTA'}

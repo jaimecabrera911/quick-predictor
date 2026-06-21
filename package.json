@@ -1,5 +1,5 @@
 {
-  "name": "quinielapp",
+  "name": "quickpredictor",
   "main": "expo-router/entry",
   "version": "1.0.0",
   "dependencies": {
@@ -8,6 +8,7 @@
     "@react-native-community/datetimepicker": "9.1.0",
     "@supabase/supabase-js": "^2.108.2",
     "expo": "~56.0.12",
+    "expo-build-properties": "~56.0.19",
     "expo-constants": "~56.0.18",
     "expo-device": "~56.0.4",
     "expo-font": "~56.0.7",
@@ -38,8 +39,8 @@
   "scripts": {
     "start": "expo start",
     "reset-project": "node ./scripts/reset-project.js",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "expo lint"
   },

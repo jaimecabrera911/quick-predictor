@@ -18,12 +18,14 @@ const TAB_ICONS: Record<string, keyof typeof MaterialIcons.glyphMap> = {
   index: 'emoji-events',
   explore: 'fact-check',
   admin: 'admin-panel-settings',
+  profile: 'person',
 };
 
 const TAB_LABELS: Record<string, string> = {
   index: 'TORNEOS',
   explore: 'PRONÓSTICOS',
   admin: 'ADMIN',
+  profile: 'PERFIL',
 };
 
 export default function AppTabs() {
@@ -33,21 +35,24 @@ export default function AppTabs() {
 
   const isAdmin = user?.role === 'super_admin' || user?.role === 'admin';
 
+  const tabs = [
+    { name: 'index', href: '/(tabs)' as const },
+    { name: 'explore', href: '/(tabs)/explore' as const },
+    ...(isAdmin ? [{ name: 'admin' as const, href: '/(tabs)/admin' as const }] : []),
+    { name: 'profile' as const, href: '/(tabs)/profile' as const },
+  ];
+
   return (
     <Tabs>
       <TabSlot style={styles.slot} />
-      <TabList style={[styles.tabBar, { paddingBottom: insets.bottom, backgroundColor: theme.tabBar, borderTopColor: theme.surfaceBorder }]}>
-        <TabTrigger name="index" href={'/(tabs)' as any} asChild>
-          <TabIconButton name="index" />
-        </TabTrigger>
-        <TabTrigger name="explore" href={'/(tabs)/explore' as any} asChild>
-          <TabIconButton name="explore" />
-        </TabTrigger>
-        {isAdmin && (
-          <TabTrigger name="admin" href={'/(tabs)/admin' as any} asChild>
-            <TabIconButton name="admin" />
-          </TabTrigger>
-        )}
+      <TabList asChild>
+        <View style={StyleSheet.flatten([styles.tabBar, { paddingBottom: insets.bottom, backgroundColor: theme.tabBar, borderTopColor: theme.surfaceBorder }])}>
+          {tabs.map((t) => (
+            <TabTrigger key={t.name} name={t.name} href={t.href} asChild>
+              <TabIconButton name={t.name} />
+            </TabTrigger>
+          ))}
+        </View>
       </TabList>
     </Tabs>
   );

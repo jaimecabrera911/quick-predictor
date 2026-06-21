@@ -365,7 +365,7 @@ export default function AdminScreen() {
               { color: theme.textMuted, marginTop: Spacing.half },
             ]}
           >
-            Activa torneos para que los usuarios creen quinielas
+            Activa torneos para que los usuarios creen ligas
           </ThemedText>
         </View>
 
@@ -604,11 +604,11 @@ export default function AdminScreen() {
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.two, marginBottom: Spacing.two }}>
                         <MaterialIcons name="quiz" size={16} color={Palette.neonOrange} />
                         <ThemedText style={[Typography.small, { color: Palette.neonOrange, letterSpacing: 1 }]}>
-                          QUINIELAS ({allQuinielas.length})
+                          LIGAS ({allQuinielas.length})
                         </ThemedText>
                       </View>
                       {allQuinielas.length === 0 ? (
-                        <ThemedText style={[Typography.caption, { color: theme.textMuted }]}>Sin quinielas creadas</ThemedText>
+                        <ThemedText style={[Typography.caption, { color: theme.textMuted }]}>Sin ligas creadas</ThemedText>
                       ) : (
                         <View style={{ gap: Spacing.one }}>
                           {allQuinielas.map((q) => (
@@ -629,11 +629,11 @@ export default function AdminScreen() {
                     <Pressable
                       onPress={async () => {
                         const confirmReset = Platform.OS === 'web' 
-                          ? window.confirm("¿Estás seguro de que quieres restablecer toda la base de datos? Esto eliminará todos los torneos, usuarios y quinielas locales.")
+                          ? window.confirm("¿Estás seguro de que quieres restablecer toda la base de datos? Esto eliminará todos los torneos, usuarios y ligas locales.")
                           : await new Promise<boolean>((resolve) => {
                               Alert.alert(
                                 "Restablecer Datos",
-                                "¿Estás seguro de que quieres restablecer toda la base de datos? Esto eliminará todos los torneos, usuarios y quinielas locales.",
+                                "¿Estás seguro de que quieres restablecer toda la base de datos? Esto eliminará todos los torneos, usuarios y ligas locales.",
                                 [
                                   { text: "Cancelar", onPress: () => resolve(false), style: "cancel" },
                                   { text: "Confirmar", onPress: () => resolve(true), style: "destructive" }
@@ -1122,7 +1122,7 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     maxWidth: MaxContentWidth,
-    paddingTop: Platform.OS === 'web' ? 85 : 0,
+    paddingTop: 0,
   },
   header: {
     paddingHorizontal: Spacing.five,

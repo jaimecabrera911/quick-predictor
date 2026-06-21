@@ -1204,7 +1204,7 @@ export default function PredictionsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, justifyContent: 'center', flexDirection: 'row', position: 'relative' },
-  safeArea: { flex: 1, maxWidth: MaxContentWidth, paddingTop: Platform.OS === 'web' ? 85 : 0 },
+  safeArea: { flex: 1, maxWidth: MaxContentWidth, paddingTop: 0 },
   scroll: { paddingBottom: BottomTabInset + Spacing.five },
   hero: { padding: Spacing.five, paddingTop: Spacing.six, gap: Spacing.two },
   section: { paddingHorizontal: Spacing.five, gap: Spacing.three },

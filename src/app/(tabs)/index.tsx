@@ -210,28 +210,11 @@ export default function TorneosScreen() {
             >
               <View>
                 <ThemedText
-                  style={[Typography.small, { color: Palette.neonGreen, letterSpacing: 4 }]}
+                  style={[Typography.display1, { color: theme.text }]}
                 >
-                  TORNEOS DISPONIBLES
-                </ThemedText>
-                <ThemedText style={[Typography.display1, { color: theme.text }]}>
-                  Quiniela
+                  Torneos Disponibles
                 </ThemedText>
               </View>
-              <Pressable
-                onPress={auth.signOut}
-                style={({ pressed }) => ({
-                  opacity: pressed ? 0.6 : 1,
-                  padding: Spacing.two,
-                })}
-              >
-                <ThemedText
-                  style={[Typography.small, { color: theme.textMuted, letterSpacing: 1 }]}
-                >
-                  {auth.user?.displayName ?? auth.user?.email ?? ''}
-                  {'\n'}CERRAR SESIÓN
-                </ThemedText>
-              </Pressable>
             </View>
           </View>
 
@@ -310,7 +293,7 @@ export default function TorneosScreen() {
                       <ThemedText
                         style={[Typography.bodyBold, { color: accentColor, fontWeight: '700', letterSpacing: 1 }]}
                       >
-                        + CREAR QUINIELA
+                        + CREAR LIGA
                       </ThemedText>
                     </Pressable>
 
@@ -453,20 +436,20 @@ export default function TorneosScreen() {
                   <ThemedText
                     style={[Typography.small, { color: Palette.neonPurple, letterSpacing: 2, marginTop: Spacing.two }]}
                   >
-                    MIS QUINIELAS
+                    MIS TORNEOS
                   </ThemedText>
                   {userQuinielas.map((q) => {
                     const isCreator = q.createdBy === auth.user?.id;
 
                     const confirmDelete = () => {
                       if (Platform.OS === 'web') {
-                        if (window.confirm(`¿Estás seguro de que quieres eliminar la quiniela "${q.name}"?`)) {
+                        if (window.confirm(`¿Estás seguro de que quieres eliminar la liga "${q.name}"?`)) {
                           handleDeleteQuiniela(q.id);
                         }
                       } else {
                         Alert.alert(
-                          'Confirmación',
-                          `¿Estás seguro de que quieres eliminar la quiniela "${q.name}"?`,
+                          'Eliminar Liga',
+                          `¿Estás seguro de que quieres eliminar la liga "${q.name}"?`,
                           [
                             { text: 'Cancelar', style: 'cancel' },
                             { text: 'Eliminar', style: 'destructive', onPress: () => handleDeleteQuiniela(q.id) }
@@ -477,13 +460,13 @@ export default function TorneosScreen() {
 
                     const confirmLeave = () => {
                       if (Platform.OS === 'web') {
-                        if (window.confirm(`¿Estás seguro de que deseas salirte de la quiniela "${q.name}"?`)) {
+                        if (window.confirm(`¿Estás seguro de que deseas salirte de la liga "${q.name}"?`)) {
                           handleLeaveQuiniela(q.id);
                         }
                       } else {
                         Alert.alert(
                           'Confirmación',
-                          `¿Estás seguro de que deseas salirte de la quiniela "${q.name}"?`,
+                          `¿Estás seguro de que deseas salirte de la liga "${q.name}"?`,
                           [
                             { text: 'Cancelar', style: 'cancel' },
                             { text: 'Salir', style: 'destructive', onPress: () => handleLeaveQuiniela(q.id) }
@@ -511,7 +494,7 @@ export default function TorneosScreen() {
                               <Pressable
                                 onPress={() => {
                                   Share.share({
-                                    message: `Únete a mi quiniela "${q.name}" con el código: ${q.inviteCode}`,
+                                    message: `Únete a mi liga "${q.name}" con el código: ${q.inviteCode}`,
                                   });
                                 }}
                                 style={{ marginLeft: Spacing.two }}
@@ -640,7 +623,7 @@ export default function TorneosScreen() {
             />
 
             <ThemedText style={[Typography.headline, { color: Palette.neonGreen, textAlign: 'center', marginBottom: Spacing.one }]}>
-              ¡Quiniela Creada!
+              ¡Liga Creada!
             </ThemedText>
             <ThemedText style={[Typography.body, { color: theme.text, textAlign: 'center', marginBottom: Spacing.three }]}>
               {createdQuiniela?.name}
@@ -672,7 +655,7 @@ export default function TorneosScreen() {
                 <Pressable
                   onPress={() => {
                     Share.share({
-                      message: `Únete a mi quiniela "${createdQuiniela.name}" con el código: ${createdQuiniela.inviteCode}`,
+                      message: `Únete a mi liga "${createdQuiniela.name}" con el código: ${createdQuiniela.inviteCode}`,
                     });
                   }}
                   style={({ pressed }) => ({
@@ -735,7 +718,7 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     maxWidth: MaxContentWidth,
-    paddingTop: Platform.OS === 'web' ? 85 : 0,
+    paddingTop: 0,
   },
   scroll: {
     paddingBottom: BottomTabInset + Spacing.five,

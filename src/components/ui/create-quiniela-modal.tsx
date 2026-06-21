@@ -220,7 +220,7 @@ export function CreateQuinielaModal({
               <TextInput
                 value={name}
                 onChangeText={setName}
-                placeholder="Nombre de tu quiniela"
+                placeholder="Nombre de tu liga"
                 placeholderTextColor={theme.textMuted}
                 style={[styles.input, { color: theme.text, borderColor: theme.surfaceBorder, backgroundColor: theme.surface }]}
               />

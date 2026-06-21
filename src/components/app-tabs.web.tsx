@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   Tabs,
   TabList,
@@ -6,227 +7,337 @@ import {
   TabTriggerSlotProps,
   TabListProps,
 } from 'expo-router/ui';
-import { SymbolView } from 'expo-symbols';
-import { Pressable, useColorScheme, View, StyleSheet, Platform } from 'react-native';
+import { Pressable, View, StyleSheet, Platform, useWindowDimensions } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 
-import { ExternalLink } from './external-link';
 import { ThemedText } from './themed-text';
-import { ThemedView } from './themed-view';
 import { AppLogo } from '@/components/ui/app-logo';
-
-import { Colors, MaxContentWidth, Spacing, Palette, BorderRadius } from '@/constants/theme';
+import { Spacing, Palette } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
 import { useTheme } from '@/hooks/use-theme';
 
+const BREAKPOINT = 1024;
+const NAV_HEIGHT = 56;
+
+const TAB_ICONS: Record<string, keyof typeof MaterialIcons.glyphMap> = {
+  index: 'emoji-events',
+  explore: 'fact-check',
+  admin: 'admin-panel-settings',
+};
+
+const TAB_LABELS: Record<string, string> = {
+  index: 'Torneos',
+  explore: 'Pronósticos',
+  admin: 'Admin',
+};
+
+const TABS = ['index', 'explore', 'admin'] as const;
+
 export default function AppTabs() {
-  const scheme = useColorScheme();
-  const isDark = scheme !== 'light';
-  const colors = isDark ? Colors.dark : Colors.light;
-  const { user } = useAuth();
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= BREAKPOINT;
+  const { user, signOut } = useAuth();
   const isAdmin = user?.role === 'super_admin' || user?.role === 'admin';
+  const initial = user ? (user.displayName || user.email)[0].toUpperCase() : '';
 
   return (
     <Tabs>
-      <TabSlot style={{ height: '100%' }} />
       <TabList asChild>
-        <CustomTabList>
+        <Navbar isDesktop={isDesktop} user={user ? { initial, onSignOut: signOut } : undefined} isAdmin={isAdmin}>
           <TabTrigger name="index" href={'/(tabs)' as any} asChild>
-            <TabButton icon="emoji-events">TORNEOS</TabButton>
+            <NavButton icon={TAB_ICONS['index']} label={TAB_LABELS['index']} />
           </TabTrigger>
           <TabTrigger name="explore" href={'/(tabs)/explore' as any} asChild>
-            <TabButton icon="fact-check">MIS PRONÓSTICOS</TabButton>
+            <NavButton icon={TAB_ICONS['explore']} label={TAB_LABELS['explore']} />
           </TabTrigger>
           {isAdmin && (
             <TabTrigger name="admin" href={'/(tabs)/admin' as any} asChild>
-              <TabButton icon="admin-panel-settings">ADMIN</TabButton>
+              <NavButton icon={TAB_ICONS['admin']} label={TAB_LABELS['admin']} />
             </TabTrigger>
           )}
-        </CustomTabList>
+          <TabTrigger name="profile" href={'/(tabs)/profile' as any} style={{ display: 'none' }} />
+        </Navbar>
       </TabList>
+      <TabSlot style={{ height: '100%', paddingTop: NAV_HEIGHT + 8 }} />
     </Tabs>
   );
 }
 
-export function TabButton({ children, isFocused, icon, ...props }: TabTriggerSlotProps & { icon?: keyof typeof MaterialIcons.glyphMap }) {
+function NavButton({
+  icon,
+  label,
+  isFocused,
+  ...props
+}: TabTriggerSlotProps & { icon: keyof typeof MaterialIcons.glyphMap; label: string }) {
   const theme = useTheme();
   return (
-    <Pressable {...props} style={({ pressed }) => pressed && styles.pressed}>
-      <View
-        style={[
-          styles.tabButtonView,
-          isFocused ? {
-            backgroundColor: 'rgba(0, 255, 178, 0.1)',
-            borderColor: theme.neonGreen,
-            ...Platform.select({
-              web: {
-                boxShadow: '0px 0px 10px rgba(0, 255, 178, 0.25)'
-              }
-            })
-          } : {
-            backgroundColor: 'transparent',
-            borderColor: 'transparent'
-          }
-        ]}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-          {icon && (
-            <MaterialIcons
-              name={icon}
-              size={16}
-              color={isFocused ? theme.neonGreen : theme.textMuted}
-            />
-          )}
-          <ThemedText
-            style={{
-              fontSize: 11,
-              fontWeight: '700',
-              letterSpacing: 1,
-              color: isFocused ? theme.neonGreen : theme.textMuted,
-            }}
-          >
-            {children}
-          </ThemedText>
-        </View>
-      </View>
+    <Pressable
+      {...props}
+      style={({ pressed }) => [
+        styles.navBtn,
+        isFocused && { backgroundColor: theme.neonGreen + '14' },
+        pressed && { opacity: 0.7 },
+      ]}
+    >
+      <MaterialIcons name={icon} size={20} color={isFocused ? theme.neonGreen : theme.textMuted} />
+      <ThemedText
+        style={{
+          fontSize: 13,
+          fontWeight: isFocused ? '700' : '500',
+          color: isFocused ? theme.neonGreen : theme.textMuted,
+        }}
+      >
+        {label}
+      </ThemedText>
     </Pressable>
   );
 }
 
-export function CustomTabList(props: TabListProps) {
-  const scheme = useColorScheme();
-  const isDark = scheme !== 'light';
-  const colors = isDark ? Colors.dark : Colors.light;
+interface NavbarProps extends TabListProps {
+  isDesktop: boolean;
+  user?: { initial: string; onSignOut: () => void };
+  isAdmin: boolean;
+}
+
+function Navbar({ isDesktop, user, children, isAdmin, ...props }: NavbarProps) {
   const theme = useTheme();
-  const { user, signOut } = useAuth();
+  const router = useRouter();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+
+  const tabs = TABS
+    .filter((name) => name !== 'admin' || isAdmin)
+    .map((name) => ({
+      name,
+      icon: TAB_ICONS[name],
+      label: TAB_LABELS[name],
+      href: name === 'index' ? '/(tabs)' as any : `/(tabs)/${name}` as any,
+    }));
 
   return (
-    <View {...props} style={styles.tabListContainer}>
-      <ThemedView 
-        type="surface" 
-        style={[
-          styles.innerContainer, 
-          { 
-            borderColor: colors.surfaceBorder,
-            backgroundColor: isDark ? 'rgba(26, 26, 46, 0.92)' : 'rgba(255, 255, 255, 0.92)',
-            ...Platform.select({
-              web: {
-                boxShadow: isDark 
-                  ? '0px 8px 32px rgba(0, 0, 0, 0.5), 0px 0px 15px rgba(108, 92, 231, 0.15)'
-                  : '0px 8px 32px rgba(0, 0, 0, 0.08)',
-                backdropFilter: 'blur(20px)',
-              }
-            })
-          }
-        ]}
-      >
-        <View style={{ marginRight: 'auto' }}>
-          <AppLogo variant="full" width={140} height={48} />
+    <View
+      {...props}
+      style={[
+        styles.navbar,
+        {
+          backgroundColor: theme.background,
+          borderBottomColor: theme.surfaceBorder,
+        },
+        Platform.select({ web: { boxShadow: '0 1px 3px rgba(0,0,0,0.08)' } }),
+      ]}
+    >
+      {/* Nav bar row */}
+      <View style={styles.navRow}>
+        <AppLogo variant="full" width={100} height={36} />
+
+        <View style={{ flex: isDesktop ? 1 : 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', opacity: isDesktop ? 1 : 0 }}>
+          {children}
         </View>
 
-        <View style={{ flexDirection: 'row', gap: Spacing.two, alignItems: 'center' }}>
-          {props.children}
-        </View>
+        {!isDesktop && <View style={{ flex: 1 }} />}
 
-        {user && (
-          <View style={{ 
-            flexDirection: 'row', 
-            alignItems: 'center', 
-            gap: Spacing.two, 
-            marginLeft: Spacing.two,
-            paddingLeft: Spacing.three,
-            borderLeftWidth: 1,
-            borderLeftColor: colors.surfaceBorder
-          }}>
-            <View style={[styles.avatar, { backgroundColor: theme.neonPurple + '15', borderWidth: 1, borderColor: theme.neonPurple }]}>
-              <ThemedText style={[styles.avatarText, { color: theme.neonPurple }]}>
-                {(user.displayName || user.email)[0].toUpperCase()}
-              </ThemedText>
+        {isDesktop ? (
+          user && (
+            <View style={{ position: 'relative' }}>
+              <Pressable
+                onPress={() => setUserMenuOpen(!userMenuOpen)}
+                style={({ pressed }) => ({
+                  flexDirection: 'row', alignItems: 'center', gap: 8,
+                  paddingVertical: 6, paddingHorizontal: 10, borderRadius: 10,
+                  opacity: pressed ? 0.7 : 1,
+                  backgroundColor: userMenuOpen ? theme.surfaceBorder + '40' : 'transparent',
+                })}
+              >
+                <View style={[styles.avatar, { backgroundColor: theme.neonPurple + '20', borderColor: theme.neonPurple + '40' }]}>
+                  <ThemedText style={{ fontSize: 13, fontWeight: '700', color: theme.neonPurple }}>
+                    {user.initial}
+                  </ThemedText>
+                </View>
+                <MaterialIcons name="expand-more" size={18} color={theme.textMuted} />
+              </Pressable>
+
+              {userMenuOpen && (
+                <Pressable style={styles.backdrop} onPress={() => setUserMenuOpen(false)} />
+              )}
+
+              {userMenuOpen && (
+                <View style={[styles.userDropdown, { backgroundColor: theme.background, borderColor: theme.surfaceBorder }]}>
+                  <Pressable
+                    style={({ pressed }) => ({
+                      flexDirection: 'row', alignItems: 'center', gap: 12,
+                      paddingVertical: 12, paddingHorizontal: 16,
+                      opacity: pressed ? 0.6 : 1,
+                    })}
+                    onPress={() => { setUserMenuOpen(false); router.push('/(tabs)/profile' as any); }}
+                  >
+                    <MaterialIcons name="person" size={18} color={theme.textMuted} />
+                    <ThemedText style={{ fontSize: 14, fontWeight: '500' }}>Perfil</ThemedText>
+                  </Pressable>
+                  <View style={{ height: 1, backgroundColor: theme.surfaceBorder, marginHorizontal: 12 }} />
+                  <Pressable
+                    onPress={() => { setUserMenuOpen(false); user.onSignOut(); }}
+                    style={({ pressed }) => ({
+                      flexDirection: 'row', alignItems: 'center', gap: 12,
+                      paddingVertical: 12, paddingHorizontal: 16,
+                      opacity: pressed ? 0.6 : 1,
+                    })}
+                  >
+                    <MaterialIcons name="logout" size={18} color={Palette.neonPink} />
+                    <ThemedText style={{ fontSize: 14, fontWeight: '500', color: Palette.neonPink }}>Cerrar sesión</ThemedText>
+                  </Pressable>
+                </View>
+              )}
             </View>
-            <View style={{ display: Platform.OS === 'web' ? 'flex' : 'none' }}>
-              <ThemedText style={{ fontSize: 11, fontWeight: '600', color: theme.text }}>
-                {user.displayName || user.email.split('@')[0]}
-              </ThemedText>
-              <ThemedText style={{ fontSize: 8, color: theme.textMuted, letterSpacing: 0.5, textTransform: 'uppercase' }}>
-                {user.role}
-              </ThemedText>
-            </View>
-            <Pressable
-              onPress={signOut}
-              style={({ pressed }) => ({
-                backgroundColor: Palette.neonPink + '12',
-                borderColor: Palette.neonPink,
-                borderWidth: 1,
-                borderRadius: BorderRadius.sm,
-                paddingVertical: Spacing.one - 2,
-                paddingHorizontal: Spacing.two,
-                alignItems: 'center',
-                opacity: pressed ? 0.7 : 1,
-                marginLeft: Spacing.one,
-                ...Platform.select({
-                  web: {
-                    boxShadow: pressed ? 'none' : '0px 0px 8px rgba(255, 51, 102, 0.15)'
-                  }
-                })
-              })}
-            >
-              <ThemedText style={{ fontSize: 10, color: Palette.neonPink, fontWeight: '700', letterSpacing: 0.5 }}>
-                SALIR
-              </ThemedText>
+          )
+        ) : (
+          <Pressable
+            onPress={() => setMenuOpen(true)}
+            style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, padding: 8 })}
+          >
+            <MaterialIcons name="menu" size={26} color={theme.text} />
+          </Pressable>
+        )}
+      </View>
+
+      {/* Mobile menu backdrop */}
+      {menuOpen && (
+        <Pressable style={styles.backdrop} onPress={() => setMenuOpen(false)} />
+      )}
+
+      {/* Mobile menu panel */}
+      {menuOpen && (
+        <View style={[styles.menuPanel, { backgroundColor: theme.background, borderColor: theme.surfaceBorder }]}>
+          <View style={styles.menuHeader}>
+            <ThemedText style={{ fontSize: 16, fontWeight: '700' }}>Navegación</ThemedText>
+            <Pressable onPress={() => setMenuOpen(false)} style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, padding: 4 })}>
+              <MaterialIcons name="close" size={24} color={theme.text} />
             </Pressable>
           </View>
-        )}
-      </ThemedView>
+
+          {tabs.map((t) => (
+            <Pressable
+              key={t.name}
+              onPress={() => { setMenuOpen(false); router.push(t.href); }}
+              style={({ pressed }) => ({
+                flexDirection: 'row', alignItems: 'center', gap: 14,
+                paddingVertical: 14, paddingHorizontal: 20,
+                opacity: pressed ? 0.6 : 1, borderRadius: 12, marginHorizontal: 8,
+              })}
+            >
+              <MaterialIcons name={t.icon} size={22} color={theme.neonGreen} />
+              <ThemedText style={{ fontSize: 16, fontWeight: '600' }}>{t.label}</ThemedText>
+            </Pressable>
+          ))}
+
+          {user && (
+            <>
+              <View style={{ height: 1, backgroundColor: theme.surfaceBorder, marginVertical: 8, marginHorizontal: 16 }} />
+              <Pressable
+                onPress={() => { setMenuOpen(false); router.push('/(tabs)/profile' as any); }}
+                style={({ pressed }) => ({
+                  flexDirection: 'row', alignItems: 'center', gap: 14,
+                  paddingVertical: 14, paddingHorizontal: 20,
+                  opacity: pressed ? 0.6 : 1, marginHorizontal: 8,
+                })}
+              >
+                <MaterialIcons name="person" size={20} color={theme.textMuted} />
+                <ThemedText style={{ fontSize: 15, fontWeight: '500' }}>Perfil</ThemedText>
+              </Pressable>
+              <Pressable
+                onPress={user.onSignOut}
+                style={({ pressed }) => ({
+                  flexDirection: 'row', alignItems: 'center', gap: 14,
+                  paddingVertical: 14, paddingHorizontal: 20,
+                  opacity: pressed ? 0.6 : 1, marginHorizontal: 8,
+                })}
+              >
+                <MaterialIcons name="logout" size={20} color={Palette.neonPink} />
+                <ThemedText style={{ fontSize: 15, fontWeight: '600', color: Palette.neonPink }}>
+                  Cerrar sesión
+                </ThemedText>
+              </Pressable>
+            </>
+          )}
+        </View>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  tabListContainer: {
+  navbar: {
     position: 'absolute',
     top: 0,
-    width: '100%',
-    padding: Spacing.four,
-    justifyContent: 'center',
-    alignItems: 'center',
-    flexDirection: 'row',
+    left: 0,
+    right: 0,
     zIndex: 1000,
+    borderBottomWidth: 1,
   },
-  innerContainer: {
-    paddingVertical: Spacing.three,
-    paddingHorizontal: Spacing.five,
-    borderRadius: BorderRadius.lg,
+  navRow: {
+    height: NAV_HEIGHT,
     flexDirection: 'row',
     alignItems: 'center',
-    flexGrow: 1,
-    gap: Spacing.three,
-    maxWidth: 800,
-    borderWidth: 1,
+    paddingHorizontal: 16,
   },
-  brandText: {
-    marginRight: 'auto',
-    fontSize: 14,
-    fontWeight: '800',
-    letterSpacing: 2,
-  },
-  pressed: {
-    opacity: 0.7,
-  },
-  tabButtonView: {
-    paddingVertical: Spacing.two,
-    paddingHorizontal: Spacing.four,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    borderColor: 'transparent',
+  navBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
   },
   avatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  avatarText: {
-    fontSize: 11,
-    fontWeight: '700',
+  backdrop: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  menuPanel: {
+    position: 'absolute',
+    top: NAV_HEIGHT + 1,
+    right: 12,
+    width: 260,
+    borderRadius: 16,
+    borderWidth: 1,
+    paddingVertical: 12,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
+      },
+    }),
+  },
+  menuHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingBottom: 8,
+  },
+  userDropdown: {
+    position: 'absolute',
+    top: '100%',
+    right: 0,
+    width: 200,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingVertical: 8,
+    marginTop: 6,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
+      },
+    }),
   },
 });

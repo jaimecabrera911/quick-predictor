@@ -46,7 +46,7 @@ export default function WelcomeScreen() {
           </ThemedText>
 
           <View style={styles.features}>
-            {['Partidos en vivo', 'Clasificación en tiempo real', 'Quinielas con amigos'].map((item) => (
+            {['Partidos en vivo', 'Clasificación en tiempo real', 'Ligas con amigos'].map((item) => (
               <ThemedText
                 key={item}
                 style={[Typography.small, { color: theme.neonCyan + 'CC', letterSpacing: 0.8 }]}

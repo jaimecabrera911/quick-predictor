@@ -1,19 +1,26 @@
 import { useEffect, useState } from 'react';
 import { Stack } from 'expo-router';
 import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
-import { useColorScheme, View, ActivityIndicator } from 'react-native';
+import { useColorScheme, View } from 'react-native';
+import * as SplashScreen from 'expo-splash-screen';
 
-import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { RepositoryProvider, initDatabase } from '@/db';
 import { AuthProvider } from '@/hooks/use-auth';
 import { Palette } from '@/constants/theme';
+
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
   const [dbReady, setDbReady] = useState(false);
 
   useEffect(() => {
-    initDatabase().then(() => setDbReady(true));
+    initDatabase()
+      .catch(() => {})
+      .finally(async () => {
+        setDbReady(true);
+        await SplashScreen.hideAsync().catch(() => {});
+      });
   }, []);
 
   if (!dbReady) {
@@ -21,13 +28,9 @@ export default function RootLayout() {
       <View
         style={{
           flex: 1,
-          justifyContent: 'center',
-          alignItems: 'center',
           backgroundColor: Palette.black,
         }}
-      >
-        <ActivityIndicator size="large" color={Palette.neonGreen} />
-      </View>
+      />
     );
   }
 
@@ -40,7 +43,6 @@ export default function RootLayout() {
     <ThemeProvider value={NavTheme}>
       <RepositoryProvider>
         <AuthProvider>
-          <AnimatedSplashOverlay />
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="(auth)" />
             <Stack.Screen name="(tabs)" />

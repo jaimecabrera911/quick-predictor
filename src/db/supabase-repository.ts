@@ -14,8 +14,8 @@ import type {
 } from './types';
 import type { IDataRepository } from './repository';
 
-const SUPABASE_URL = 'https://jnieivinbwlbboyrvwtx.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpuaWVpdmluYndsYmJveXJ2d3R4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE5ODM2MDcsImV4cCI6MjA5NzU1OTYwN30.u_Fx597Y0umj0BSqloCfp5x0bsuTF0SQD428n0HbsGE';
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://jnieivinbwlbboyrvwtx.supabase.co';
+const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpuaWVpdmluYndsYmJveXJ2d3R4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE5ODM2MDcsImV4cCI6MjA5NzU1OTYwN30.u_Fx597Y0umj0BSqloCfp5x0bsuTF0SQD428n0HbsGE';
 
 function genId(): string {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {

@@ -13,6 +13,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { ExternalLink } from './external-link';
 import { ThemedText } from './themed-text';
 import { ThemedView } from './themed-view';
+import { AppLogo } from '@/components/ui/app-logo';
 
 import { Colors, MaxContentWidth, Spacing, Palette, BorderRadius } from '@/constants/theme';
 import { useAuth } from '@/hooks/use-auth';
@@ -118,9 +119,9 @@ export function CustomTabList(props: TabListProps) {
           }
         ]}
       >
-        <ThemedText style={[styles.brandText, { color: theme.neonCyan }]}>
-          QUINIELAPP
-        </ThemedText>
+        <View style={{ marginRight: 'auto' }}>
+          <AppLogo variant="full" width={140} height={48} />
+        </View>
 
         <View style={{ flexDirection: 'row', gap: Spacing.two, alignItems: 'center' }}>
           {props.children}

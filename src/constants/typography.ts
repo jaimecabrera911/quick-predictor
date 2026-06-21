@@ -1,4 +1,4 @@
-import { Platform, TextStyle } from 'react-native';
+import { Platform, TextStyle, useWindowDimensions } from 'react-native';
 
 export const FontFamily = Platform.select({
   ios: {
@@ -26,6 +26,27 @@ export const FontFamily = Platform.select({
     rounded: 'System',
   },
 });
+
+function responsiveFontSize(size: number, width: number): number {
+  if (width < 380) return Math.round(size * 0.65);
+  if (width < 420) return Math.round(size * 0.75);
+  if (width < 520) return Math.round(size * 0.85);
+  return size;
+}
+
+export function useResponsiveTypography() {
+  const { width } = useWindowDimensions();
+
+  return {
+    display1: {
+      fontFamily: FontFamily.display,
+      fontSize: responsiveFontSize(48, width),
+      lineHeight: responsiveFontSize(52, width),
+      letterSpacing: 1.5,
+      fontWeight: '700',
+    } as TextStyle,
+  };
+}
 
 export const Typography = {
   display1: {

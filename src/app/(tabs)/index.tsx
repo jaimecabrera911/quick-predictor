@@ -8,7 +8,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { ThemedTextInput } from '@/components/ui/themed-text-input';
 import { CreateQuinielaModal } from '@/components/ui/create-quiniela-modal';
-import { Typography } from '@/constants/typography';
+import { Typography, useResponsiveTypography } from '@/constants/typography';
 import {
   BottomTabInset,
   MaxContentWidth,
@@ -47,6 +47,7 @@ export default function TorneosScreen() {
   };
   const auth = useAuth();
   const repo = useRepository();
+  const responsiveTypo = useResponsiveTypography();
   const [tournaments, setTournaments] = useState<(Tournament & { matches: Match[] })[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -208,9 +209,9 @@ export default function TorneosScreen() {
                 alignItems: 'center',
               }}
             >
-              <View>
+              <View style={{ flex: 1 }}>
                 <ThemedText
-                  style={[Typography.display1, { color: theme.text }]}
+                  style={[responsiveTypo.display1, { color: theme.text }]}
                 >
                   Torneos Disponibles
                 </ThemedText>
